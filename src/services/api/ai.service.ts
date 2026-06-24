@@ -1,13 +1,14 @@
 import axios from 'axios';
 
-const AI_API_URL = import.meta.env.VITE_AI_API_URL || 'https://3dc7-36-85-35-251.ngrok-free.app/api';
+const AI_API_URL =
+  import.meta.env.VITE_AI_API_URL || 'https://3dc7-36-85-35-251.ngrok-free.app/api';
 
 const aiApi = axios.create({
   baseURL: AI_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface PhotoMetadata {
   event_name: string;
@@ -59,50 +60,57 @@ export interface PhotosResponse {
 export interface FaceEmbeddingResponse {
   success: boolean;
   embedding?: number[];
+  confidence?: number;
   error?: string;
 }
 
+// ── Service ───────────────────────────────────────────────────────────────────
+
 export const aiService = {
-  // Upload photo (photographer only)
+
+  // ── Photographer: upload photo ─────────────────────────────────────────────
   async uploadPhoto(data: UploadPhotoData): Promise<UploadResponse> {
     const response = await aiApi.post('/photographer/upload', data);
     return response.data;
   },
 
-  // Get photographer's photos
+  // ── Photographer: list their photos ───────────────────────────────────────
   async getPhotographerPhotos(): Promise<PhotosResponse> {
     const response = await aiApi.get('/photographer/photos');
     return response.data;
   },
 
-  // Delete photo (photographer only)
+  // ── Photographer: delete a photo ──────────────────────────────────────────
   async deletePhoto(photoId: string): Promise<{ success: boolean; error?: string }> {
     const response = await aiApi.delete(`/photographer/delete/${photoId}`);
     return response.data;
   },
 
-  // Register/extract face embedding from image
+  // ── User: extract face embedding for registration / manual match ───────────
+  // This is the ONLY method the frontend should call directly on the AI server.
+  // All photo-matching must go through Node.js (/api/user/match-face) which
+  // handles auth, DB writes, and deduplication.
   async registerFace(image: string): Promise<FaceEmbeddingResponse> {
     const response = await aiApi.post('/user/register_face', { image });
     return response.data;
   },
 
-  // ❌ REMOVED: findMyPhotos - use userService.matchPhotos() instead
-  // This function was calling Python API directly without authentication
-  // Now frontend should use userService.matchPhotos() which goes through Node.js
-
-  // Get preview URL for a photo
+  // ── Preview URL helper ─────────────────────────────────────────────────────
+  // Returns the direct AI-server URL for a photo thumbnail.
+  // Use this when rendering <img> tags in the frontend.
   getPreviewUrl(photoId: string): string {
     return `${AI_API_URL}/image/preview/${photoId}`;
   },
 
-  // Get download URL for a photo
+  // ── Download URL helper (direct AI server) ─────────────────────────────────
+  // NOTE: Prefer /api/user/photos/:id/download (Node.js authenticated route)
+  // over this direct URL. Only use this for public/free previews.
   getDownloadUrl(photoId: string): string {
     return `${AI_API_URL}/download/dropbox/${photoId}`;
   },
 
-  // Health check
-  async healthCheck(): Promise<any> {
+  // ── Health check ──────────────────────────────────────────────────────────
+  async healthCheck(): Promise<{ status: string; [key: string]: unknown }> {
     const response = await aiApi.get('/health');
     return response.data;
   },

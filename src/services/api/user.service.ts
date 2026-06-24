@@ -4,16 +4,12 @@ const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3000
 
 const userApi = axios.create({
   baseURL: AUTH_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
 userApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -39,10 +35,8 @@ export interface UserPhoto {
   faces_count?: number;
   favorite_count?: number;
 
-  // Photo type — event vs standalone
   type?: 'event' | 'standalone';
 
-  // Event info (untuk type='event')
   event_id: string;
   event_name: string;
   event_type?: string;
@@ -50,17 +44,14 @@ export interface UserPhoto {
   event_location?: string;
   event_description?: string;
 
-  // Photographer info
   photographer_id?: string;
   business_name?: string;
   photographer_name: string;
 
-  // Face match info
   similarity?: number;
   confidence?: number;
   match_date?: string;
 
-  // Standalone location info (untuk type='standalone')
   latitude?: number;
   longitude?: number;
   place_name?: string;
@@ -77,11 +68,9 @@ export interface UserPhoto {
   escrow_max_revisions?: number;
   escrow_status_message?: string;
 
-  // Delivery
   delivery_version?: number | null;
   delivery_uploaded_at?: string | null;
 
-  // Pricing
   price_cash?: number;
   price_points?: number;
   price?: number;
@@ -89,26 +78,21 @@ export interface UserPhoto {
   is_for_sale?: boolean | 0 | 1;
   sold_count?: number;
 
-  // Purchase status
   is_purchased: boolean | 0 | 1;
   purchased_at?: string;
   purchase_price?: number;
   payment_method?: 'cash' | 'points';
 
-  // Favorite status
   is_favorited?: boolean | 0 | 1;
   favorited_at?: string;
   favorite_id?: string;
 
-  // URLs
   preview_url: string;
   download_url?: string | null;
 
-  // CTA dari backend
   cta?: 'BUY' | 'DOWNLOAD' | 'FREE_DOWNLOAD' | 'VIEW';
   price_display?: string;
 
-  // Legacy
   id?: string;
   upload_timestamp?: string;
   uploaded_at?: string;
@@ -201,6 +185,8 @@ export interface MyPhotosResponse {
   success: boolean;
   data?: UserPhoto[];
   matched_count?: number;
+  /** Backend is refreshing in background — show stale data with a spinner */
+  refreshing?: boolean;
   pagination?: {
     total: number;
     page: number;
@@ -221,29 +207,56 @@ export interface FavoriteResponse {
   error_code?: string;
 }
 
+export interface UserStats {
+  total_matched_photos: number;
+  total_event_matches: number;
+  total_standalone_matches: number;
+  total_downloads: number;
+  total_favorites?: number;
+  total_spent: number;
+  total_points_spent?: number;
+  recent_matches: number;
+}
+
 // ============ SERVICE ============
 
 export const userService = {
-  // ── Balance ──────────────────────────────────────────────────
 
+  // ── Balance ──────────────────────────────────────────────────────────────────
   async getBalance(): Promise<{ success: boolean; data?: UserBalance; error?: string }> {
     const response = await userApi.get('/user/balance');
     return response.data;
   },
 
-  // ── My Photos (event matches) ─────────────────────────────────
-  // Backend: GET /api/user/my-photos → UserController.getMyMatchedPhotos
+  // ── Statistics ────────────────────────────────────────────────────────────────
+  async getUserStats(): Promise<{ success: boolean; data?: UserStats; error?: string }> {
+    const response = await userApi.get('/user/statistics');
+    return response.data;
+  },
 
-  async getMyPhotos(params?: { page?: number; limit?: number }): Promise<MyPhotosResponse> {
+  // ── Match photos via AI (dipanggil dari useMyPhotos background trigger) ───────
+    async matchMyPhotos(data: { embedding: number[]; user_id: string }): Promise<MyPhotosResponse> {
+      const response = await userApi.post('/user/my_photos', {
+        embedding: data.embedding,
+        user_id: data.user_id,
+      });
+      return response.data;
+    },
+
+  // ── My Photos (event matches, cached) ─────────────────────────────────────────
+  // Pass refresh=true to silently re-run AI matching in the background.
+  // The call still returns immediately with cached data; `refreshing: true` in
+  // the response tells the UI to show a subtle "updating…" indicator.
+  async getMyPhotos(params?: {
+    page?: number;
+    limit?: number;
+    refresh?: boolean;
+  }): Promise<MyPhotosResponse> {
     const response = await userApi.get('/user/my-photos', { params });
     return response.data;
   },
 
-  // ── My Standalone Photos ──────────────────────────────────────
-  // Backend: GET /api/user/my-standalone-photos → UserController.getMyMatchedStandalonePhotos
-  // Controller sudah ada, route harus didaftarkan di user.routes.js:
-  //   router.get('/my-standalone-photos', UserController.getMyMatchedStandalonePhotos);
-
+  // ── My Standalone Photos ──────────────────────────────────────────────────────
   async getMyStandalonePhotos(params?: {
     page?: number;
     limit?: number;
@@ -252,29 +265,60 @@ export const userService = {
     return response.data;
   },
 
-  // ── Purchased Photos ──────────────────────────────────────────
-  // Backend: GET /api/user/purchased → UserController.getPurchasedPhotos
+  // ── Combined feed: event + standalone merged ──────────────────────────────────
+  // Fetches both in parallel and returns a single sorted array.
+  async getMyAllPhotos(params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<MyPhotosResponse> {
+    const [eventRes, standaloneRes] = await Promise.allSettled([
+      userService.getMyPhotos(params),
+      userService.getMyStandalonePhotos(params),
+    ]);
 
+    const eventPhotos      = eventRes.status === 'fulfilled' ? eventRes.value.data ?? [] : [];
+    const standalonePhotos = standaloneRes.status === 'fulfilled' ? standaloneRes.value.data ?? [] : [];
+
+    // Tag event photos so UI can differentiate
+    const tagged = [
+      ...eventPhotos.map(p => ({ ...p, type: 'event' as const })),
+      ...standalonePhotos.map(p => ({ ...p, type: 'standalone' as const })),
+    ].sort((a, b) => {
+      // Sort by match_date descending (newest first)
+      const dateA = new Date(a.match_date ?? a.event_date ?? 0).getTime();
+      const dateB = new Date(b.match_date ?? b.event_date ?? 0).getTime();
+      return dateB - dateA;
+    });
+
+    return {
+      success: true,
+      data:    tagged,
+      pagination: {
+        total:       tagged.length,
+        page:        params?.page ?? 1,
+        limit:       params?.limit ?? 100,
+        total_pages: 1,
+      },
+    };
+  },
+
+  // ── Purchased Photos ──────────────────────────────────────────────────────────
   async getPurchasedPhotos(params?: { page?: number; limit?: number }): Promise<MyPhotosResponse> {
     const response = await userApi.get('/user/purchased', { params });
     return response.data;
   },
 
-  // ── Favorite Photos ───────────────────────────────────────────
-  // Backend: GET /api/user/favorites → UserController.getFavoritePhotos
-
+  // ── Favorite Photos (event) ───────────────────────────────────────────────────
   async getFavoritePhotos(params?: { page?: number; limit?: number }): Promise<MyPhotosResponse> {
     const response = await userApi.get('/user/favorites', { params });
     return response.data;
   },
 
-  // Backend: POST /api/user/photos/:photoId/favorite → UserController.addToFavorites
   async addToFavorites(photoId: string): Promise<FavoriteResponse> {
     const response = await userApi.post(`/user/photos/${photoId}/favorite`);
     return response.data;
   },
 
-  // Backend: DELETE /api/user/photos/:photoId/favorite → UserController.removeFromFavorites
   async removeFromFavorites(photoId: string): Promise<FavoriteResponse> {
     const response = await userApi.delete(`/user/photos/${photoId}/favorite`);
     return response.data;
@@ -285,9 +329,11 @@ export const userService = {
     return response.data;
   },
 
-  // ── Standalone Favorites ──────────────────────────────────────
-  // Backend: POST /api/user/standalone-photos/:photoId/favorite
-  // Route harus ditambahkan di user.routes.js (lihat catatan di bawah)
+  // ── Favorite Photos (standalone) ──────────────────────────────────────────────
+  async getStandaloneFavorites(params?: { page?: number; limit?: number }): Promise<MyPhotosResponse> {
+    const response = await userApi.get('/user/standalone-favorites', { params });
+    return response.data;
+  },
 
   async addStandaloneToFavorites(photoId: string): Promise<FavoriteResponse> {
     const response = await userApi.post(`/user/standalone-photos/${photoId}/favorite`);
@@ -299,17 +345,23 @@ export const userService = {
     return response.data;
   },
 
-  async getStandaloneFavorites(params?: {
-    page?: number;
-    limit?: number;
-  }): Promise<MyPhotosResponse> {
-    const response = await userApi.get('/user/standalone-favorites', { params });
-    return response.data;
+  // ── Unified favorite toggle (works for both event and standalone) ─────────────
+  async toggleFavorite(
+    photoId: string,
+    photoType: 'event' | 'standalone',
+    currentlyFavorited: boolean,
+  ): Promise<FavoriteResponse> {
+    if (photoType === 'standalone') {
+      return currentlyFavorited
+        ? userService.removeStandaloneFromFavorites(photoId)
+        : userService.addStandaloneToFavorites(photoId);
+    }
+    return currentlyFavorited
+      ? userService.removeFromFavorites(photoId)
+      : userService.addToFavorites(photoId);
   },
 
-  // ── Photo Purchase ────────────────────────────────────────────
-  // Backend: POST /api/user/photos/:photoId/purchase → UserController.initiatePhotoPurchase
-
+  // ── Purchase (event photo) ────────────────────────────────────────────────────
   async purchasePhoto(photoId: string, paymentMethod: 'cash' | 'points'): Promise<PurchaseResponse> {
     const response = await userApi.post(`/user/photos/${photoId}/purchase`, {
       payment_method: paymentMethod,
@@ -317,10 +369,7 @@ export const userService = {
     return response.data;
   },
 
-  // Backend: POST /api/user/standalone-photos/:photoId/purchase → UserController.purchaseStandalonePhoto
-  // Route harus ditambahkan di user.routes.js:
-  //   router.post('/standalone-photos/:photoId/purchase', UserController.purchaseStandalonePhoto);
-
+  // ── Purchase (standalone photo) ───────────────────────────────────────────────
   async purchaseStandalonePhoto(
     photoId: string,
     paymentMethod: 'cash' | 'points',
@@ -331,14 +380,23 @@ export const userService = {
     return response.data;
   },
 
-  // ── Photo Download ────────────────────────────────────────────
-  // Backend: GET /api/user/photos/:photoId/download → UserController.downloadPurchasedPhoto
+  // ── Unified purchase (works for both) ─────────────────────────────────────────
+  async purchaseAnyPhoto(
+    photoId: string,
+    photoType: 'event' | 'standalone',
+    paymentMethod: 'cash' | 'points',
+  ): Promise<PurchaseResponse> {
+    return photoType === 'standalone'
+      ? userService.purchaseStandalonePhoto(photoId, paymentMethod)
+      : userService.purchasePhoto(photoId, paymentMethod);
+  },
 
+  // ── Download (event photo) ─────────────────────────────────────────────────────
   async downloadPhoto(photoId: string): Promise<void> {
     const downloadUrl = `${userApi.defaults.baseURL}/user/photos/${photoId}/download`;
     const token = localStorage.getItem('auth_token');
-    const link = document.createElement('a');
-    link.href = `${downloadUrl}?token=${token}`;
+    const link  = document.createElement('a');
+    link.href   = `${downloadUrl}?token=${token}`;
     link.target = '_blank';
     document.body.appendChild(link);
     link.click();
@@ -352,8 +410,17 @@ export const userService = {
     return response.data;
   },
 
-  // Backend: GET /api/user/standalone-photos/:photoId/download
-  // Sesuai user.routes.js: router.get('/standalone-photos/:photoId/download', ...)
+  // ── Download (standalone photo) ───────────────────────────────────────────────
+  async downloadStandalonePhoto(photoId: string): Promise<void> {
+    const downloadUrl = `${userApi.defaults.baseURL}/user/standalone-photos/${photoId}/download`;
+    const token = localStorage.getItem('auth_token');
+    const link  = document.createElement('a');
+    link.href   = `${downloadUrl}?token=${token}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
 
   async downloadStandalonePhotoBlob(photoId: string): Promise<Blob> {
     const response = await userApi.get(`/user/standalone-photos/${photoId}/download`, {
@@ -362,27 +429,20 @@ export const userService = {
     return response.data;
   },
 
-  async downloadStandalonePhoto(photoId: string): Promise<void> {
-    const downloadUrl = `${userApi.defaults.baseURL}/user/standalone-photos/${photoId}/download`;
-    const token = localStorage.getItem('auth_token');
-    const link = document.createElement('a');
-    link.href = `${downloadUrl}?token=${token}`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // ── Unified download (works for both) ─────────────────────────────────────────
+  async downloadAnyPhoto(photoId: string, photoType: 'event' | 'standalone'): Promise<void> {
+    return photoType === 'standalone'
+      ? userService.downloadStandalonePhoto(photoId)
+      : userService.downloadPhoto(photoId);
   },
 
-  // ── Face Matching ─────────────────────────────────────────────
-  // Backend: POST /api/user/match-face → UserController.matchUserFace
-
+  // ── Face Matching (manual trigger) ────────────────────────────────────────────
   async matchPhotos(data: MatchPhotosData): Promise<MyPhotosResponse> {
     const response = await userApi.post('/user/match-face', data);
     return response.data;
   },
 
-  // ── Browse Events ─────────────────────────────────────────────
-
+  // ── Browse Events ─────────────────────────────────────────────────────────────
   async browseEvents(): Promise<{ success: boolean; data?: EventBrowse[]; error?: string }> {
     const response = await userApi.get('/user/events');
     return response.data;
@@ -397,27 +457,6 @@ export const userService = {
     photoId: string,
   ): Promise<{ success: boolean; data?: PhotoDetail; error?: string }> {
     const response = await userApi.get(`/user/photos/${photoId}`);
-    return response.data;
-  },
-
-  // ── Statistics ────────────────────────────────────────────────
-  // Backend: GET /api/user/statistics → UserController.getUserStatistics
-
-  async getUserStats(): Promise<{
-    success: boolean;
-    data?: {
-      total_matched_photos: number;
-      total_event_matches: number;
-      total_standalone_matches: number;
-      total_downloads: number;
-      total_favorites?: number;
-      total_spent: number;
-      total_points_spent?: number;
-      recent_matches: number;
-    };
-    error?: string;
-  }> {
-    const response = await userApi.get('/user/statistics');
     return response.data;
   },
 };

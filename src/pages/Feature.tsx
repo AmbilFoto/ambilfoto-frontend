@@ -1,554 +1,493 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Camera, 
-  Zap, 
-  Shield, 
-  Clock, 
-  Sparkles, 
-  Search,
-  Download,
-  Users,
-  Lock,
-  Smartphone,
-  Globe,
-  CheckCircle2,
-  ArrowRight,
-  Image,
-  Brain,
-  Star,
-  TrendingUp,
-  Heart,
-  Layers
-} from "lucide-react";
-import { useState, useEffect } from "react";
+/**
+ * Features.tsx — AmbilFoto design system
+ * Palette: blue + amber + orange | Font: Sora
+ * Animations: CSS IntersectionObserver + MutationObserver
+ *             fast easing (0.45s cubic-bezier), threshold 5%, unobserve after fire
+ */
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import {
+  Camera, Zap, Shield, Brain, Download, Search,
+  Clock, Smartphone, Users, Globe, Lock, BarChart3,
+  ArrowRight, Check, Sparkles, Image, TrendingUp,
+  CheckCircle2, Star, Heart,
+} from "lucide-react";
 
-const Features = () => {
-  const [scrollY, setScrollY] = useState(0);
-  const [isVisible, setIsVisible] = useState({});
-  const [activeFeature, setActiveFeature] = useState(0);
+/* ─────────────────────────────────────────────────────────
+   STYLES
+───────────────────────────────────────────────────────── */
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+  * { box-sizing: border-box; }
+  .pg { font-family:'Sora',system-ui,sans-serif; }
+  .fw8 { font-weight:800; letter-spacing:-0.03em; }
+  .g-blue { background:linear-gradient(135deg,#1d4ed8,#2563eb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
 
+  /* Buttons */
+  .btn-b { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;border:none;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:white;box-shadow:0 6px 20px rgba(29,78,216,0.28);transition:transform .2s,box-shadow .2s; }
+  .btn-b:hover { transform:translateY(-2px);box-shadow:0 12px 32px rgba(29,78,216,0.38); }
+  .btn-o { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;background:white;color:#1e40af;border:1.5px solid rgba(29,78,216,0.22);transition:all .2s; }
+  .btn-o:hover { background:#eff6ff;border-color:rgba(29,78,216,0.45);transform:translateY(-1px); }
+  .btn-g { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;background:rgba(255,255,255,0.13);color:white;border:1.5px solid rgba(255,255,255,0.28);transition:all .2s; }
+  .btn-g:hover { background:rgba(255,255,255,0.22);transform:translateY(-1px); }
+
+  /* Pill */
+  .pill { display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase; }
+
+  /* Cards */
+  .af-card { background:white;border:1.5px solid #f1f5f9;border-radius:20px;padding:24px;transition:border-color .28s,box-shadow .28s,transform .28s; }
+  .af-card:hover { border-color:rgba(59,130,246,.2);box-shadow:0 8px 28px rgba(59,130,246,.09);transform:translateY(-3px); }
+
+  .fpill { display:flex;align-items:center;gap:12px;padding:14px 18px;background:white;border:1.5px solid #f1f5f9;border-radius:16px;transition:border-color .25s,box-shadow .25s; }
+  .fpill:hover { border-color:rgba(59,130,246,.2);box-shadow:0 4px 16px rgba(59,130,246,.08); }
+
+  /* Tab */
+  .tab-active { background:linear-gradient(135deg,#1d4ed8,#2563eb);color:white;border-color:transparent;box-shadow:0 6px 20px rgba(29,78,216,0.22); }
+  .tab-inactive { background:white;color:#64748b;border:1.5px solid #f1f5f9; }
+  .tab-inactive:hover { border-color:rgba(29,78,216,0.2);color:#1d4ed8; }
+
+  /* Scroll reveal */
+  .rv { opacity:0; will-change:opacity,transform; }
+  .rv.rv-u  { transform:translateY(28px); }
+  .rv.rv-l  { transform:translateX(-36px); }
+  .rv.rv-r  { transform:translateX(36px); }
+  .rv.rv-s  { transform:scale(0.94); }
+  .rv.in    {
+    opacity:1 !important; transform:none !important;
+    transition: opacity .45s cubic-bezier(0.22,1,0.36,1),
+                transform .45s cubic-bezier(0.22,1,0.36,1);
+  }
+  .rv[data-i="1"] { transition-delay:.06s; }
+  .rv[data-i="2"] { transition-delay:.12s; }
+  .rv[data-i="3"] { transition-delay:.18s; }
+
+  /* Hero */
+  .h-in { opacity:0; animation:hIn .65s cubic-bezier(0.22,1,0.36,1) forwards; }
+  @keyframes hIn { to { opacity:1; transform:none; } }
+  .from-y { transform:translateY(24px); }
+  .h-d0{animation-delay:.04s} .h-d1{animation-delay:.16s} .h-d2{animation-delay:.28s} .h-d3{animation-delay:.38s} .h-d4{animation-delay:.48s}
+
+  /* Live dot */
+  @keyframes ld { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.78)} }
+  .ldot { display:inline-block;width:7px;height:7px;border-radius:50%;background:#3b82f6;animation:ld 1.8s ease-in-out infinite; }
+
+  /* Trust check */
+  .chk { display:flex;align-items:center;gap:8px;font-size:13px;color:#64748b; }
+
+  /* Step line connector */
+  .step-line { position:absolute;top:24px;left:calc(50% + 28px);width:calc(100% - 56px);height:1.5px;background:linear-gradient(90deg,#bfdbfe,#e0f2fe);z-index:0; }
+`;
+
+/* ─────────────────────────────────────────────────────────
+   HOOKS
+───────────────────────────────────────────────────────── */
+function useReveal() {
   useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
+    const obs = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          setIsVisible((prev) => ({
-            ...prev,
-            [entry.target.id]: entry.isIntersecting,
-          }));
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            obs.unobserve(e.target);
+          }
         });
       },
-      { threshold: 0.1 }
+      { threshold: 0.05, rootMargin: "0px 0px -20px 0px" }
     );
-
-    document.querySelectorAll("[id^='animate-']").forEach((el) => {
-      observer.observe(el);
-    });
-
-    return () => observer.disconnect();
+    const scan = () =>
+      document.querySelectorAll(".rv:not(.in)").forEach((el) => obs.observe(el));
+    scan();
+    const mut = new MutationObserver(scan);
+    mut.observe(document.body, { childList: true, subtree: true });
+    return () => { obs.disconnect(); mut.disconnect(); };
   }, []);
+}
+
+function useCanvas(ref: React.RefObject<HTMLCanvasElement>) {
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    let id: number;
+    const rs = () => { c.width = c.offsetWidth; c.height = c.offsetHeight; };
+    rs();
+    window.addEventListener("resize", rs);
+    const N = 50;
+    const dots = Array.from({ length: N }, () => ({
+      x: Math.random() * c.width, y: Math.random() * c.height,
+      r: Math.random() * 1.8 + 0.4,
+      vx: (Math.random() - 0.5) * 0.32, vy: (Math.random() - 0.5) * 0.32,
+      a: Math.random() * 0.22 + 0.06,
+    }));
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      dots.forEach((d) => {
+        d.x += d.vx; d.y += d.vy;
+        if (d.x < 0 || d.x > c.width) d.vx *= -1;
+        if (d.y < 0 || d.y > c.height) d.vy *= -1;
+        ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(59,130,246,${d.a})`; ctx.fill();
+      });
+      for (let i = 0; i < N; i++)
+        for (let j = i + 1; j < N; j++) {
+          const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 100) {
+            ctx.beginPath(); ctx.moveTo(dots[i].x, dots[i].y); ctx.lineTo(dots[j].x, dots[j].y);
+            ctx.strokeStyle = `rgba(59,130,246,${0.055 * (1 - dist / 100)})`;
+            ctx.lineWidth = 1; ctx.stroke();
+          }
+        }
+      id = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(id); window.removeEventListener("resize", rs); };
+  }, []);
+}
+
+/* ─────────────────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────────────────── */
+const Features = () => {
+  const [activeTab, setActiveTab] = useState<"user" | "photographer">("user");
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useCanvas(canvasRef);
+  useReveal();
 
   const mainFeatures = [
-    {
-      icon: Brain,
-      title: "AI Face Recognition",
-      description: "Teknologi AI canggih yang dapat mengenali wajah Anda dengan akurasi hingga 95%+ di ribuan foto",
-      color: "text-purple-500",
-      bgColor: "bg-purple-500/10",
-      gradient: "from-purple-500 to-pink-500"
-    },
-    {
-      icon: Zap,
-      title: "Instant Search",
-      description: "Temukan semua foto Anda dalam hitungan detik. Tidak perlu scroll ratusan foto lagi",
-      color: "text-yellow-500",
-      bgColor: "bg-yellow-500/10",
-      gradient: "from-yellow-500 to-orange-500"
-    },
-    {
-      icon: Shield,
-      title: "Privacy First",
-      description: "Data wajah Anda dienkripsi end-to-end dan tidak pernah dibagikan kepada pihak ketiga",
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
-      gradient: "from-blue-500 to-cyan-500"
-    },
-    {
-      icon: Download,
-      title: "Easy Download",
-      description: "Download semua foto Anda sekaligus atau pilih foto favorit dengan mudah",
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-      gradient: "from-green-500 to-emerald-500"
-    },
-  ];
-
-  const detailedFeatures = [
-    {
-      icon: Camera,
-      title: "Upload Wajah Sekali",
-      description: "Cukup upload foto wajah Anda satu kali, dan sistem kami akan mengingat untuk pencarian berikutnya",
-      benefits: [
-        "Upload foto selfie atau portrait",
-        "Multiple face angles untuk akurasi lebih baik",
-        "Tidak perlu upload ulang setiap event"
-      ]
-    },
-    {
-      icon: Search,
-      title: "Smart Search Algorithm",
-      description: "Algoritma pencarian pintar yang terus belajar dan meningkat seiring waktu",
-      benefits: [
-        "Machine learning untuk hasil lebih akurat",
-        "Pencarian di multiple events sekaligus",
-        "Filter berdasarkan tanggal dan lokasi"
-      ]
-    },
-    {
-      icon: Image,
-      title: "High Quality Photos",
-      description: "Semua foto tersedia dalam resolusi penuh tanpa kompresi",
-      benefits: [
-        "Download dalam kualitas original",
-        "Preview dengan loading cepat",
-        "Support berbagai format file"
-      ]
-    },
-    {
-      icon: Clock,
-      title: "Real-time Processing",
-      description: "Pemrosesan foto secara real-time begitu photographer upload",
-      benefits: [
-        "Notifikasi instant ketika foto tersedia",
-        "Live update dari event yang berlangsung",
-        "Akses cepat tanpa delay"
-      ]
-    },
-    {
-      icon: Smartphone,
-      title: "Mobile Friendly",
-      description: "Akses dari smartphone, tablet, atau desktop dengan pengalaman optimal",
-      benefits: [
-        "Responsive design untuk semua device",
-        "Progressive Web App (PWA)",
-        "Offline mode untuk foto yang sudah didownload"
-      ]
-    },
-    {
-      icon: Users,
-      title: "Multi-Event Support",
-      description: "Cari foto Anda dari berbagai event yang berbeda dalam satu platform",
-      benefits: [
-        "Dashboard untuk semua event Anda",
-        "History pencarian tersimpan",
-        "Bookmark event favorit"
-      ]
-    }
-  ];
-
-  const benefits = [
-    {
-      icon: Star,
-      title: "Hemat Waktu",
-      description: "Yang tadinya butuh 30 menit scroll foto, sekarang hanya 30 detik",
-      stat: "95%"
-    },
-    {
-      icon: Heart,
-      title: "Lebih Menyenangkan",
-      description: "Nikmati event tanpa khawatir mencari foto setelahnya",
-      stat: "100%"
-    },
-    {
-      icon: TrendingUp,
-      title: "Akurasi Tinggi",
-      description: "Teknologi AI kami memiliki tingkat akurasi pengenalan wajah hingga 95%+",
-      stat: "95%+"
-    },
-    {
-      icon: Lock,
-      title: "Aman & Privat",
-      description: "Data Anda dilindungi dengan enkripsi tingkat bank",
-      stat: "256-bit"
-    }
+    { Icon: Brain,    title: "AI Face Recognition", desc: "Akurasi 95%+ di ribuan foto",        c: "text-blue-600",   bg: "bg-blue-50"   },
+    { Icon: Zap,      title: "Instant Search",       desc: "Temukan foto dalam hitungan detik",  c: "text-amber-600",  bg: "bg-amber-50"  },
+    { Icon: Shield,   title: "Privacy First",        desc: "Enkripsi end-to-end, data aman",     c: "text-blue-600",   bg: "bg-blue-50"   },
+    { Icon: Download, title: "Easy Download",        desc: "Download semua foto sekaligus",       c: "text-emerald-600",bg: "bg-emerald-50"},
   ];
 
   const howItWorks = [
-    {
-      step: "1",
-      title: "Upload Foto Wajah",
-      description: "Upload foto selfie atau portrait Anda. Sistem kami akan memprosesnya dengan AI.",
-      icon: Camera
-    },
-    {
-      step: "2",
-      title: "Pilih Event",
-      description: "Pilih event yang ingin Anda cari fotonya dari daftar event yang tersedia.",
-      icon: Search
-    },
-    {
-      step: "3",
-      title: "Temukan Foto Anda",
-      description: "AI kami akan mencari dan menampilkan semua foto yang ada wajah Anda.",
-      icon: Sparkles
-    },
-    {
-      step: "4",
-      title: "Download & Bagikan",
-      description: "Download foto favorit Anda atau bagikan langsung ke social media.",
-      icon: Download
-    }
+    { step: "1", Icon: Camera,   title: "Upload Foto Wajah",   desc: "Upload foto selfie atau portrait. AI kami akan memprosesnya otomatis."      },
+    { step: "2", Icon: Search,   title: "Pilih Event",         desc: "Pilih event yang ingin Anda cari dari daftar event yang tersedia."           },
+    { step: "3", Icon: Sparkles, title: "AI Mencarikan Foto",  desc: "Face recognition kami menyisir ribuan foto dan menampilkan hasilnya."        },
+    { step: "4", Icon: Download, title: "Download & Bagikan",  desc: "Download foto favorit Anda atau bagikan langsung ke media sosial."           },
   ];
 
-  const techSpecs = [
-    { label: "Akurasi AI", value: "95%+", icon: Brain },
-    { label: "Kecepatan Proses", value: "< 30 detik", icon: Zap },
-    { label: "Format Support", value: "JPG, PNG, HEIC", icon: Image },
-    { label: "Max File Size", value: "50MB", icon: Layers },
-    { label: "Enkripsi", value: "AES-256", icon: Shield },
-    { label: "Uptime", value: "99.9%", icon: Globe }
+  const userFeatures = [
+    {
+      Icon: Camera, title: "Upload Wajah Sekali",
+      desc: "Cukup upload satu kali, sistem mengingat untuk pencarian berikutnya.",
+      benefits: ["Upload selfie atau portrait", "Multiple face angles", "Tidak perlu upload ulang tiap event"]
+    },
+    {
+      Icon: Search, title: "Smart Search Algorithm",
+      desc: "Algoritma pintar yang terus belajar dan meningkat seiring waktu.",
+      benefits: ["Machine learning adaptif", "Cari di multiple events sekaligus", "Filter tanggal dan lokasi"]
+    },
+    {
+      Icon: Image, title: "High Quality Photos",
+      desc: "Semua foto tersedia dalam resolusi penuh tanpa kompresi.",
+      benefits: ["Download kualitas original", "Preview loading cepat", "Support JPG, PNG, HEIC"]
+    },
+    {
+      Icon: Clock, title: "Real-time Processing",
+      desc: "Pemrosesan foto secara real-time begitu photographer upload.",
+      benefits: ["Notifikasi instant", "Live update event berlangsung", "Akses tanpa delay"]
+    },
+    {
+      Icon: Smartphone, title: "Mobile Friendly",
+      desc: "Optimal di smartphone, tablet, maupun desktop.",
+      benefits: ["Responsive semua device", "Progressive Web App (PWA)", "Offline mode tersedia"]
+    },
+    {
+      Icon: Users, title: "Multi-Event Support",
+      desc: "Cari foto dari berbagai event dalam satu platform.",
+      benefits: ["Dashboard semua event", "History pencarian tersimpan", "Bookmark event favorit"]
+    },
   ];
+
+  const photographerFeatures = [
+    {
+      Icon: Camera, title: "Bulk Photo Upload",
+      desc: "Upload ratusan foto sekaligus dengan batch processing yang handal.",
+      benefits: ["Upload hingga 10.000 foto/event", "Auto-indexing wajah saat upload", "Progress tracking real-time"]
+    },
+    {
+      Icon: Brain, title: "Auto Face Indexing",
+      desc: "Deteksi dan indeks semua wajah secara otomatis saat foto diupload.",
+      benefits: ["Deteksi wajah akurasi 95%+", "Proses background tanpa interupsi", "Laporan indexing setelah selesai"]
+    },
+    {
+      Icon: Globe, title: "Event Management",
+      desc: "Kelola semua event foto dalam satu dashboard yang mudah.",
+      benefits: ["Buat dan atur event dengan mudah", "Kontrol akses per event", "Statistik unduhan per foto"]
+    },
+    {
+      Icon: BarChart3, title: "Analytics & Insights",
+      desc: "Pantau performa event dan foto yang paling banyak dicari.",
+      benefits: ["Dashboard analytics real-time", "Laporan unduhan harian/mingguan", "Insight pencarian terpopuler"]
+    },
+    {
+      Icon: Lock, title: "Watermark & Protection",
+      desc: "Lindungi karya dengan watermark otomatis sebelum peserta download.",
+      benefits: ["Custom watermark per event", "Kontrol kualitas unduhan", "Lindungi foto original"]
+    },
+    {
+      Icon: Zap, title: "API Integration",
+      desc: "Integrasikan platform Anda langsung ke sistem kami via REST API.",
+      benefits: ["REST API lengkap & terdokumentasi", "Webhook notifikasi real-time", "SDK multi-bahasa tersedia"]
+    },
+  ];
+
+  const benefits = [
+    { Icon: Star,      stat: "95%",     title: "Hemat Waktu",    desc: "30 menit scroll foto jadi 30 detik"              },
+    { Icon: Heart,     stat: "100%",    title: "Menyenangkan",   desc: "Nikmati event tanpa khawatir cari foto"          },
+    { Icon: TrendingUp,stat: "95%+",    title: "Akurasi Tinggi", desc: "Face recognition AI terdepan"                    },
+    { Icon: Shield,    stat: "256-bit", title: "Aman & Privat",  desc: "Enkripsi tingkat bank untuk semua data"          },
+  ];
+
+  const activeFeatures = activeTab === "user" ? userFeatures : photographerFeatures;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="pg flex min-h-screen flex-col bg-white">
+      <style>{STYLES}</style>
       <Header />
-      
-      {/* Hero Section dengan Parallax */}
-      <section className="relative overflow-hidden py-20 md:py-32">
-        <div 
-          className="absolute inset-0 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10"
-          style={{
-            transform: `translateY(${scrollY * 0.5}px)`,
-          }}
-        />
-        <div className="container relative">
-          <div 
-            id="animate-hero"
-            className={`mx-auto max-w-3xl text-center transition-all duration-1000 ${
-              isVisible['animate-hero'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary animate-pulse">
-              <Sparkles className="h-4 w-4" />
-              <span>Fitur Unggulan</span>
-            </div>
-            
-            <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-              Teknologi AI yang Membuat{" "}
-              <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-                Pencarian Foto Jadi Mudah
-              </span>
-            </h1>
-            
-            <p className="mb-8 text-lg text-muted-foreground sm:text-xl">
-              Temukan semua foto Anda dari event apapun dengan teknologi face recognition terdepan. Cepat, akurat, dan aman.
-            </p>
 
-            <Button size="lg" className="shadow-lg hover:scale-105 transition-transform duration-300">
-              <Camera className="mr-2 h-5 w-5" />
-              Coba Sekarang Gratis
-            </Button>
-          </div>
-        </div>
-      </section>
+      {/* ══ HERO ════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden bg-white border-b border-slate-100 py-24 md:py-32">
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full pointer-events-none"
+          style={{ background: "radial-gradient(circle, rgba(219,234,254,0.55) 0%, transparent 70%)" }} />
+        <div className="absolute -bottom-24 -right-24 w-[400px] h-[400px] rounded-full pointer-events-none"
+          style={{ background: "radial-gradient(circle, rgba(254,243,199,0.4) 0%, transparent 70%)" }} />
 
-      {/* Main Features Grid */}
-      <section className="py-20 bg-muted/30">
-        <div className="container">
-          <div
-            id="animate-main-features-title"
-            className={`text-center mb-12 transition-all duration-1000 ${
-              isVisible['animate-main-features-title'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <h2 className="text-3xl font-bold mb-4">Fitur Utama</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Teknologi terbaik untuk pengalaman pencarian foto yang sempurna
-            </p>
-          </div>
-          
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {mainFeatures.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <Card
-                  key={index}
-                  id={`animate-main-${index}`}
-                  className={`group hover:shadow-xl transition-all duration-500 hover:-translate-y-2 border-border/50 overflow-hidden ${
-                    isVisible[`animate-main-${index}`]
-                      ? 'opacity-100 translate-y-0'
-                      : 'opacity-0 translate-y-10'
-                  }`}
-                  style={{ transitionDelay: `${index * 100}ms` }}
-                >
-                  <CardContent className="pt-6">
-                    <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-xl ${feature.bgColor} group-hover:scale-110 transition-transform duration-300`}>
-                      <Icon className={`h-7 w-7 ${feature.color}`} />
-                    </div>
-                    <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
-                    <p className="text-muted-foreground text-sm">
-                      {feature.description}
-                    </p>
-                  </CardContent>
-                  <div className={`h-1 bg-gradient-to-r ${feature.gradient} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left`} />
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works Section */}
-      <section className="py-20">
-        <div className="container">
-          <div
-            id="animate-how-title"
-            className={`text-center mb-16 transition-all duration-1000 ${
-              isVisible['animate-how-title'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <h2 className="text-3xl font-bold mb-4">Cara Kerja</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Hanya 4 langkah mudah untuk menemukan semua foto Anda
-            </p>
+        <div className="container max-w-3xl mx-auto px-6 text-center relative">
+          <div className="h-in h-d0 from-y pill bg-blue-50 text-blue-700 border border-blue-200 mb-7 mx-auto w-fit">
+            <span className="ldot" /> Fitur Unggulan AmbilFoto
           </div>
 
-          <div className="max-w-4xl mx-auto">
-            <div className="grid gap-8 md:grid-cols-2">
-              {howItWorks.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <div
-                    key={index}
-                    id={`animate-how-${index}`}
-                    className={`relative transition-all duration-1000 ${
-                      isVisible[`animate-how-${index}`]
-                        ? 'opacity-100 translate-y-0'
-                        : 'opacity-0 translate-y-10'
-                    }`}
-                    style={{ transitionDelay: `${index * 100}ms` }}
-                  >
-                    <Card className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-border/50">
-                      <CardContent className="pt-6">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground font-bold text-xl shadow-lg">
-                            {item.step}
-                          </div>
-                          <div className="flex-1">
-                            <div className="mb-2 flex items-center gap-2">
-                              <Icon className="h-5 w-5 text-primary" />
-                              <h3 className="text-lg font-semibold">{item.title}</h3>
-                            </div>
-                            <p className="text-muted-foreground text-sm">
-                              {item.description}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
+          <h1 className="fw8 h-in h-d1 from-y text-5xl md:text-6xl lg:text-7xl text-slate-900 leading-[1.05] mb-6">
+            Cari Foto Event<br />
+            <span className="g-blue">dengan Wajah Anda</span>
+          </h1>
 
-      {/* Detailed Features Section */}
-      <section className="py-20 bg-muted/30">
-        <div className="container">
-          <div
-            id="animate-detailed-title"
-            className={`text-center mb-12 transition-all duration-1000 ${
-              isVisible['animate-detailed-title'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <h2 className="text-3xl font-bold mb-4">Fitur Lengkap</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Semua yang Anda butuhkan untuk pengalaman terbaik
-            </p>
+          <p className="h-in h-d2 from-y text-lg text-slate-500 max-w-xl mx-auto leading-relaxed mb-8">
+            Teknologi AI face recognition yang mengenali wajah Anda di ribuan foto dalam hitungan detik. Cepat, akurat, dan aman.
+          </p>
+
+          <div className="h-in h-d3 from-y flex flex-wrap gap-3 justify-center mb-10">
+            <button onClick={() => navigate("/register")} className="btn-b">
+              Coba Gratis Sekarang <ArrowRight className="w-4 h-4" />
+            </button>
+            <button onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })} className="btn-o">
+              <Sparkles className="w-4 h-4 text-blue-600" /> Cara Kerja
+            </button>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {detailedFeatures.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <Card
-                  key={index}
-                  id={`animate-detailed-${index}`}
-                  className={`group hover:shadow-lg transition-all duration-500 hover:-translate-y-2 border-border/50 ${
-                    isVisible[`animate-detailed-${index}`]
-                      ? 'opacity-100 translate-y-0'
-                      : 'opacity-0 translate-y-10'
-                  }`}
-                  style={{ transitionDelay: `${index * 50}ms` }}
-                >
-                  <CardContent className="pt-6">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 text-primary group-hover:scale-110 transition-transform duration-300">
-                      <Icon className="h-6 w-6" />
-                    </div>
-                    <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
-                    <p className="text-muted-foreground text-sm mb-4">
-                      {feature.description}
-                    </p>
-                    <div className="space-y-2">
-                      {feature.benefits.map((benefit, idx) => (
-                        <div key={idx} className="flex gap-2 items-start">
-                          <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                          <p className="text-sm text-muted-foreground">{benefit}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-20">
-        <div className="container">
-          <div
-            id="animate-benefits-title"
-            className={`text-center mb-12 transition-all duration-1000 ${
-              isVisible['animate-benefits-title'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <h2 className="text-3xl font-bold mb-4">Kenapa Memilih Kami?</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Manfaat yang akan Anda dapatkan dengan menggunakan AmbilFoto.id
-            </p>
-          </div>
-
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {benefits.map((benefit, index) => {
-              const Icon = benefit.icon;
-              return (
-                <div
-                  key={index}
-                  id={`animate-benefit-${index}`}
-                  className={`text-center transition-all duration-1000 ${
-                    isVisible[`animate-benefit-${index}`]
-                      ? 'opacity-100 scale-100'
-                      : 'opacity-0 scale-95'
-                  }`}
-                  style={{ transitionDelay: `${index * 100}ms` }}
-                >
-                  <div className="mb-4 inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-secondary text-primary-foreground transform hover:scale-110 transition-transform duration-300 shadow-lg">
-                    <Icon className="h-8 w-8" />
-                  </div>
-                  <div className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                    {benefit.stat}
-                  </div>
-                  <h3 className="font-semibold mb-2">{benefit.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {benefit.description}
-                  </p>
+          <div className="h-in h-d4 from-y flex flex-wrap gap-x-6 gap-y-2 justify-center">
+            {["Akurasi AI 95%+", "Proses dalam 30 detik", "Enkripsi end-to-end", "Gratis untuk dicoba"].map(t => (
+              <div key={t} className="chk">
+                <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                  <Check className="w-2.5 h-2.5 text-emerald-600" />
                 </div>
-              );
-            })}
+                {t}
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Tech Specs Section
-      <section className="py-20 bg-muted/30">
-        <div className="container">
-          <div
-            id="animate-specs-title"
-            className={`text-center mb-12 transition-all duration-1000 ${
-              isVisible['animate-specs-title'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-            }`}
-          >
-            <h2 className="text-3xl font-bold mb-4">Spesifikasi Teknis</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Detail teknis yang mendukung performa optimal
-            </p>
-          </div>
-
-          <div className="max-w-4xl mx-auto grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {techSpecs.map((spec, index) => {
-              const Icon = spec.icon;
-              return (
-                <div
-                  key={index}
-                  id={`animate-spec-${index}`}
-                  className={`flex items-center gap-4 p-6 rounded-xl bg-background border border-border/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${
-                    isVisible[`animate-spec-${index}`]
-                      ? 'opacity-100 translate-x-0'
-                      : 'opacity-0 -translate-x-10'
-                  }`}
-                  style={{ transitionDelay: `${index * 50}ms` }}
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">{spec.label}</div>
-                    <div className="text-lg font-bold">{spec.value}</div>
-                  </div>
+      {/* ══ STATS ═══════════════════════════════════════════ */}
+      <section className="py-12 bg-white border-b border-slate-100">
+        <div className="container max-w-4xl mx-auto px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { val: "95%+",    label: "Akurasi AI",        sub: "Face recognition",      c: "text-blue-600",    bg: "bg-blue-50",    Icon: Brain    },
+              { val: "<30 dtk", label: "Kecepatan Cari",    sub: "Rata-rata per search",  c: "text-amber-600",   bg: "bg-amber-50",   Icon: Zap      },
+              { val: "10K+",    label: "Foto per Event",    sub: "Kapasitas indexing",    c: "text-blue-600",    bg: "bg-blue-50",    Icon: Image    },
+              { val: "256-bit", label: "Enkripsi",          sub: "Keamanan data wajah",   c: "text-emerald-600", bg: "bg-emerald-50", Icon: Shield   },
+            ].map(({ val, label, sub, c, bg, Icon }, i) => (
+              <div key={i} className="rv rv-u af-card text-center" data-i={i}>
+                <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center mx-auto mb-3`}>
+                  <Icon className={`w-5 h-5 ${c}`} />
                 </div>
-              );
-            })}
+                <p className={`text-2xl font-black mb-0.5 ${c}`}>{val}</p>
+                <p className="text-xs font-bold text-slate-800">{label}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
+              </div>
+            ))}
           </div>
         </div>
-      </section> */}
+      </section>
 
-      {/* CTA Section */}
-      <section className="relative py-20 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary via-secondary to-accent opacity-90" />
-        <div 
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
-            backgroundSize: '40px 40px',
-            animation: 'moveBackground 20s linear infinite',
-          }}
-        />
-        <style>
-          {`
-            @keyframes moveBackground {
-              0% { transform: translate(0, 0); }
-              100% { transform: translate(40px, 40px); }
-            }
-          `}
-        </style>
-        <div className="container relative">
-          <div
-            id="animate-cta"
-            className={`mx-auto max-w-3xl text-center text-primary-foreground transition-all duration-1000 ${
-              isVisible['animate-cta'] ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-            }`}
-          >
-            <Sparkles className="h-16 w-16 mx-auto mb-6 animate-pulse" />
-            <h2 className="text-3xl font-bold mb-4">Siap Menemukan Foto Anda?</h2>
-            <p className="text-lg mb-8 text-primary-foreground/90">
-              Bergabung dengan ribuan pengguna yang sudah merasakan kemudahan mencari foto dengan AI
+      {/* ══ MAIN FEATURES PILLS ═════════════════════════════ */}
+      <section className="py-14 bg-white border-b border-slate-100">
+        <div className="container max-w-4xl mx-auto px-6">
+          <p className="rv rv-u text-center text-xs font-black text-slate-400 uppercase tracking-widest mb-8">
+            Teknologi utama yang kami tawarkan
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {mainFeatures.map(({ Icon, title, desc, c, bg }, i) => (
+              <div key={i} className="rv rv-u fpill" data-i={i % 4}>
+                <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center shrink-0`}>
+                  <Icon className={`w-4 h-4 ${c}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{title}</p>
+                  <p className="text-xs text-slate-500">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ HOW IT WORKS ════════════════════════════════════ */}
+      <section id="how-it-works" className="py-20 bg-slate-50/60 border-b border-slate-100">
+        <div className="container max-w-5xl mx-auto px-6">
+          <div className="rv rv-u text-center mb-14">
+            <div className="pill bg-blue-50 text-blue-700 border border-blue-100 mb-4">4 Langkah Mudah</div>
+            <h2 className="fw8 text-4xl md:text-5xl text-slate-900 mb-3">
+              Cara <span className="g-blue">Kerja</span>
+            </h2>
+            <p className="text-slate-500 text-sm max-w-md mx-auto">Dari upload wajah hingga download foto — semuanya dalam hitungan detik.</p>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-6">
+            {howItWorks.map(({ step, Icon, title, desc }, i) => (
+              <div key={i} className="rv rv-u relative text-center" data-i={i}>
+                <div className="relative inline-flex mb-5">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-lg"
+                    style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)" }}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-amber-400 text-white text-xs font-black flex items-center justify-center shadow">
+                    {step}
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-800 mb-2">{title}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ TAB: PESERTA / FOTOGRAFER ═══════════════════════ */}
+      <section className="py-8 bg-white border-b border-slate-100">
+        <div className="container max-w-5xl mx-auto px-6">
+          <div className="flex justify-center gap-3">
+            {(["user", "photographer"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 ${activeTab === tab ? "tab-active" : "tab-inactive"}`}
+              >
+                {tab === "user" ? <Users className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                {tab === "user" ? "Untuk Peserta" : "Untuk Fotografer"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ DETAILED FEATURES ═══════════════════════════════ */}
+      <section className="py-20 bg-slate-50/60 border-b border-slate-100">
+        <div className="container max-w-5xl mx-auto px-6">
+          <div className="rv rv-u text-center mb-12">
+            <h2 className="fw8 text-4xl md:text-5xl text-slate-900 mb-3">
+              Fitur <span className="g-blue">Lengkap</span>
+            </h2>
+            <p className="text-slate-500 text-sm max-w-md mx-auto">
+              {activeTab === "user"
+                ? "Semua yang Anda butuhkan untuk menemukan foto dengan mudah"
+                : "Tools lengkap untuk mengelola dan mendistribusikan foto event"}
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" variant="secondary" className="shadow-lg hover:scale-105 transition-transform duration-300">
-                <Camera className="mr-2 h-5 w-5" />
-                Mulai Gratis
-              </Button>
-              <Button size="lg" variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/30 hover:scale-105 transition-transform duration-300">
-                Lihat Demo
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {activeFeatures.map(({ Icon, title, desc, benefits }, i) => (
+              <div key={`${activeTab}-${i}`} className="rv rv-u af-card" data-i={i % 3}>
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5 text-blue-600" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800 mb-1">{title}</h3>
+                <p className="text-xs text-slate-500 mb-4 leading-relaxed">{desc}</p>
+                <div className="space-y-2">
+                  {benefits.map((b, bi) => (
+                    <div key={bi} className="flex items-start gap-2">
+                      <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <Check className="w-2.5 h-2.5 text-emerald-600" />
+                      </div>
+                      <p className="text-xs text-slate-500">{b}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ BENEFITS / WHY US ═══════════════════════════════ */}
+      <section className="py-20 bg-white border-b border-slate-100">
+        <div className="container max-w-4xl mx-auto px-6">
+          <div className="rv rv-u text-center mb-12">
+            <div className="pill bg-blue-50 text-blue-700 border border-blue-100 mb-4">Kenapa Memilih Kami</div>
+            <h2 className="fw8 text-4xl md:text-5xl text-slate-900 mb-3">
+              Manfaat yang <span className="g-blue">Nyata</span>
+            </h2>
+            <p className="text-slate-500 text-sm max-w-md mx-auto">
+              Bukan sekadar janji — ini yang benar-benar Anda rasakan saat menggunakan AmbilFoto.id
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {benefits.map(({ Icon, stat, title, desc }, i) => (
+              <div key={i} className="rv rv-u af-card text-center" data-i={i}>
+                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 hover:scale-110 transition-transform duration-300">
+                  <Icon className="w-6 h-6 text-blue-600" />
+                </div>
+                <p className="text-2xl font-black mb-1"
+                  style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  {stat}
+                </p>
+                <p className="text-xs font-bold text-slate-800 mb-1">{title}</p>
+                <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ CTA ═════════════════════════════════════════════ */}
+      <section className="py-20 bg-white border-t border-slate-100">
+        <div className="container max-w-2xl mx-auto px-6 text-center">
+          <div className="rv rv-s relative overflow-hidden rounded-3xl p-12 shadow-2xl shadow-blue-100"
+            style={{ background: "linear-gradient(135deg,#1d4ed8 0%,#1e40af 100%)" }}>
+            <div className="absolute inset-0 opacity-10 pointer-events-none"
+              style={{ backgroundImage: "radial-gradient(circle,white 1px,transparent 1px)", backgroundSize: "28px 28px" }} />
+            <div className="absolute -top-14 -left-14 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
+            <div className="absolute -bottom-14 -right-14 w-56 h-56 rounded-full bg-amber-300/10 blur-2xl" />
+            <div className="relative">
+              <h2 className="fw8 text-4xl text-white mt-3 mb-3 leading-tight">Siap Menemukan Foto Anda?</h2>
+              <p className="text-blue-100 text-sm mb-8 max-w-md mx-auto leading-relaxed">
+                Bergabung dengan ribuan pengguna yang sudah merasakan kemudahan mencari foto dengan AI face recognition.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <button onClick={() => navigate("/register")}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
+                  Mulai Gratis <ArrowRight className="w-4 h-4" />
+                </button>
+                <button onClick={() => navigate("/pricing")} className="btn-g text-sm">
+                  Lihat Harga
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </section>
-      
+
       <Footer />
     </div>
   );
