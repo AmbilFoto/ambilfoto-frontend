@@ -3,9 +3,19 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Download, Calendar, MapPin, Loader2, AlertCircle, Eye, Sparkles, ShoppingCart, Coins, Heart } from "lucide-react";
+import {
+  Download,
+  Calendar,
+  MapPin,
+  Loader2,
+  AlertCircle,
+  Eye,
+  Sparkles,
+  ShoppingCart,
+  Coins,
+  Heart,
+} from "lucide-react";
 import { UserPhoto } from "@/services/api/user.service";
-import { aiService } from "@/services/api/ai.service";
 import { cn } from "@/lib/utils";
 
 interface PhotoListItemProps {
@@ -17,58 +27,70 @@ interface PhotoListItemProps {
   onClick: () => void;
 }
 
-export const PhotoListItem = ({ 
-  photo, 
-  onDownload, 
-  onBuy, 
+export const PhotoListItem = ({
+  photo,
+  onDownload,
+  onBuy,
   onToggleFavorite,
-  isDownloading, 
-  onClick 
+  isDownloading,
+  onClick,
 }: PhotoListItemProps) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const matchScore = photo.similarity ? Math.round(photo.similarity * 100) : 0;
-  
-  const previewUrl = photo.preview_url;
-  const photoId = photo.event_photo_id || photo.photo_id;
-  const eventName = photo.event_name || 'Unknown Event';
-  const eventDate = photo.event_date;
-  const location = photo.event_location;
+  const isStandalone = photo.type === "standalone";
 
-  // ✅ FIX: Determine CTA - ALWAYS check is_purchased FIRST
+  // ✅ FIX: standalone uses photo_id, event photo uses event_photo_id
+  const downloadId = isStandalone
+    ? photo.photo_id
+    : photo.event_photo_id || photo.photo_id;
+
+  const previewUrl = photo.preview_url;
+
+  // Display info differs per type
+  const primaryLabel = isStandalone
+    ? photo.place_name || photo.photographer_name || "Foto Standalone"
+    : photo.event_name || "Unknown Event";
+
+  const secondaryDate = isStandalone ? null : photo.event_date;
+  const locationLabel = isStandalone
+    ? photo.photographer_name
+    : photo.event_location;
+
   const isPurchased = photo.is_purchased === true || photo.is_purchased === 1;
-  const isFree = photo.is_for_sale === false || (photo.price_cash === 0 && photo.price_points === 0);
-  
-  // Priority order:
-  // 1. If purchased -> DOWNLOAD
-  // 2. If free -> FREE_DOWNLOAD  
-  // 3. Otherwise -> BUY
-  const cta = isPurchased 
-    ? 'DOWNLOAD' as const
-    : isFree 
-    ? 'FREE_DOWNLOAD' as const
-    : photo.cta || 'BUY' as const;
-  
-  const priceDisplay = photo.price_display || '';
+  const isFree =
+    photo.is_for_sale === false ||
+    (photo.price_cash === 0 && photo.price_points === 0);
+
+  const cta = isPurchased
+    ? ("DOWNLOAD" as const)
+    : isFree
+    ? ("FREE_DOWNLOAD" as const)
+    : photo.cta || ("BUY" as const);
+
+  const priceDisplay = photo.price_display || "";
 
   const getMatchColor = (percentage: number) => {
-    if (percentage >= 90) return "bg-green-500/10 text-green-500 border-green-500/30";
-    if (percentage >= 70) return "bg-yellow-500/10 text-yellow-500 border-yellow-500/30";
+    if (percentage >= 90)
+      return "bg-green-500/10 text-green-500 border-green-500/30";
+    if (percentage >= 70)
+      return "bg-yellow-500/10 text-yellow-500 border-yellow-500/30";
     return "bg-orange-500/10 text-orange-500 border-orange-500/30";
   };
 
   return (
     <Card className="border-2 border-gray-200 shadow-md hover:shadow-xl transition-all duration-300 rounded-xl overflow-hidden bg-white">
       <div className="p-4 flex items-center gap-4">
-        <div 
-          className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0 relative overflow-hidden cursor-pointer group" 
+        {/* Thumbnail */}
+        <div
+          className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0 relative overflow-hidden cursor-pointer group"
           onClick={onClick}
         >
           {!imageLoaded && !imageError && (
             <Skeleton className="absolute inset-0" />
           )}
-          
+
           {imageError ? (
             <AlertCircle className="h-8 w-8 text-muted-foreground" />
           ) : (
@@ -77,7 +99,7 @@ export const PhotoListItem = ({
                 src={previewUrl}
                 alt={photo.filename}
                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0'
+                  imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
                 onLoad={() => setImageLoaded(true)}
                 onError={() => setImageError(true)}
@@ -88,53 +110,76 @@ export const PhotoListItem = ({
             </>
           )}
         </div>
-        
+
+        {/* Info */}
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold mb-1.5 truncate text-base text-gray-800">
-            {eventName}
-          </h3>
+          <div className="flex items-center gap-1.5 mb-1">
+            <h3 className="font-semibold truncate text-base text-gray-800">
+              {primaryLabel}
+            </h3>
+            {/* ✅ NEW: standalone badge */}
+            {isStandalone && (
+              <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs shrink-0">
+                <MapPin className="h-3 w-3 mr-0.5" />
+                Standalone
+              </Badge>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-            {eventDate && (
+            {secondaryDate && (
               <div className="flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
-                <span>{new Date(eventDate).toLocaleDateString('id-ID')}</span>
+                <span>
+                  {new Date(secondaryDate).toLocaleDateString("id-ID")}
+                </span>
               </div>
             )}
-            {location && (
+            {locationLabel && (
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />
-                <span className="truncate max-w-[150px]">{location}</span>
+                <span className="truncate max-w-[150px]">{locationLabel}</span>
               </div>
             )}
             {matchScore > 0 && (
-              <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${getMatchColor(matchScore)}`}>
+              <div
+                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${getMatchColor(
+                  matchScore
+                )}`}
+              >
                 <Sparkles className="h-3 w-3" />
                 <span>{matchScore}% Match</span>
               </div>
             )}
           </div>
         </div>
-        
+
+        {/* Actions */}
         <div className="flex gap-2 shrink-0 items-center">
-          {/* Price/Status badge */}
-          {cta === 'BUY' && (
-            <Badge variant="secondary" className="gap-1 hidden sm:flex bg-yellow-100 text-yellow-700">
+          {cta === "BUY" && (
+            <Badge
+              variant="secondary"
+              className="gap-1 hidden sm:flex bg-yellow-100 text-yellow-700"
+            >
               <Coins className="h-3 w-3" />
               {priceDisplay || `${photo.price_points || 5} FOTOPOIN`}
             </Badge>
           )}
-          {cta === 'FREE_DOWNLOAD' && (
-            <Badge variant="outline" className="gap-1 hidden sm:flex text-green-600 border-green-500/30 bg-green-50">
+          {cta === "FREE_DOWNLOAD" && (
+            <Badge
+              variant="outline"
+              className="gap-1 hidden sm:flex text-green-600 border-green-500/30 bg-green-50"
+            >
               GRATIS
             </Badge>
           )}
-          {cta === 'DOWNLOAD' && isPurchased && (
+          {cta === "DOWNLOAD" && isPurchased && (
             <Badge className="gap-1 hidden sm:flex bg-blue-100 text-blue-700 border-blue-200">
               ✓ Dibeli
             </Badge>
           )}
-          
-          {/* Favorite Button */}
+
+          {/* Favorite */}
           {onToggleFavorite && (
             <Button
               variant="ghost"
@@ -145,21 +190,21 @@ export const PhotoListItem = ({
               }}
               className={cn(
                 "h-9 w-9 p-0 rounded-lg transition-all",
-                photo.is_favorited 
-                  ? "text-red-500 hover:text-red-600 hover:bg-red-50" 
+                photo.is_favorited
+                  ? "text-red-500 hover:text-red-600 hover:bg-red-50"
                   : "text-gray-400 hover:text-red-500 hover:bg-red-50"
               )}
             >
-              <Heart 
+              <Heart
                 className={cn(
                   "h-4 w-4 transition-all",
                   photo.is_favorited && "fill-current"
-                )} 
+                )}
               />
             </Button>
           )}
-          
-          <Button 
+
+          <Button
             size="sm"
             variant="outline"
             className="rounded-lg border-2 hover:border-blue-400 hover:bg-blue-50"
@@ -168,9 +213,9 @@ export const PhotoListItem = ({
             <Eye className="mr-1.5 h-4 w-4" />
             <span className="hidden sm:inline">View</span>
           </Button>
-          
-          {cta === 'BUY' ? (
-            <Button 
+
+          {cta === "BUY" ? (
+            <Button
               size="sm"
               className="rounded-lg bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-md"
               onClick={(e) => {
@@ -191,13 +236,13 @@ export const PhotoListItem = ({
                 </>
               )}
             </Button>
-          ) : cta === 'FREE_DOWNLOAD' ? (
-            <Button 
+          ) : cta === "FREE_DOWNLOAD" ? (
+            <Button
               size="sm"
               className="rounded-lg bg-green-600 hover:bg-green-500 shadow-md"
               onClick={(e) => {
                 e.stopPropagation();
-                onDownload(photoId);
+                onDownload(downloadId);
               }}
               disabled={isDownloading}
             >
@@ -214,12 +259,12 @@ export const PhotoListItem = ({
               )}
             </Button>
           ) : (
-            <Button 
+            <Button
               size="sm"
               className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-md"
               onClick={(e) => {
                 e.stopPropagation();
-                onDownload(photoId);
+                onDownload(downloadId);
               }}
               disabled={isDownloading}
             >
