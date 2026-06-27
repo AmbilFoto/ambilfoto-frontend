@@ -142,7 +142,15 @@ export const chatService = {
   async getMyChats(type?: 'direct' | 'complaint'): Promise<Chat[]> {
     const params = type ? `?type=${type}` : '';
     const response = await chatApi.get(`/chat/my-chats${params}`);
-    return response.data.data || [];
+    const data: Chat[] = response.data.data || [];
+    
+    
+    // Normalise unread_count — backend kadang kirim string "0"
+    return data.map((chat) => ({
+      ...chat,
+      unread_count: Number(chat.unread_count) || 0,
+      is_locked: Boolean(chat.is_locked), // ← tambah ini
+    }));
   },
 
   // Get messages in a chat (paginated)
