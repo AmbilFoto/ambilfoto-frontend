@@ -513,6 +513,7 @@ const Index = () => {
       {/* ═══ MARKETPLACE ════════════════════════════════════════ */}
       <section className="marketplace-section py-20 bg-slate-50/70">
         <div className="container max-w-6xl mx-auto px-6">
+          {/* Ganti flex row jadi flex col di mobile */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
             <div>
               <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-3">🔥 Trending Sekarang</div>
@@ -520,11 +521,17 @@ const Index = () => {
                 Foto Event<br /><span className="gradient-text-warm">Terpopuler</span>
               </h2>
             </div>
-            <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 text-sm shadow-sm">
+            {/* Ganti bagian tab filter */}
+            <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 text-sm shadow-sm overflow-x-auto scrollbar-none max-w-full shrink-0">
               {["Semua","Wisuda","Konser","Konferensi"].map((t,i) => (
-                <button key={t} className={`px-4 py-2 rounded-lg transition-all font-medium ${i===0?"tab-active":"text-slate-500 hover:text-slate-700"}`}>{t}</button>
+                <button 
+                  key={t} 
+                  className={`px-4 py-2 rounded-lg transition-all font-medium whitespace-nowrap ${i===0?"tab-active":"text-slate-500 hover:text-slate-700"}`}
+                >
+                  {t}
+                </button>
               ))}
-            </div>
+          </div>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
