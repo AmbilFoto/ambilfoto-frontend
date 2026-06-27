@@ -618,7 +618,7 @@ const PhotoGallery = () => {
             </Link>
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div>
-                <h1 className="text-3xl md:text-4xl font-black mb-1 bg-blue-900 bg-clip-text text-transparent">
+                <h1 className="text-2xl md:text-4xl font-black mb-1 bg-blue-900 bg-clip-text text-transparent">
                   Ambil Foto{" "}
                   {activeTab === "temuan" ? "Temuan" : activeTab === "favorite" ? "Favorit" : "Koleksi"}
                 </h1>
@@ -630,7 +630,7 @@ const PhotoGallery = () => {
                     : `${filteredPhotos.length} foto ditemukan`}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 shrink-0">
                 <Link to="/user/scan-face">
                   <Button variant="outline" size="sm" className="border-2 hover:border-blue-400 hover:bg-blue-50 rounded-xl">
                     <Camera className="mr-2 h-4 w-4" />
