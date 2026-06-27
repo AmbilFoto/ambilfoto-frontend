@@ -130,8 +130,9 @@ const ChatList = () => {
                   onClick={() => handleChatClick(chat)}
                 >
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="relative">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar + unread badge */}
+                      <div className="relative shrink-0">
                         <Avatar className="h-12 w-12">
                           <AvatarImage src={other?.profile_photo} />
                           <AvatarFallback className="bg-primary/10 text-primary">
@@ -139,32 +140,56 @@ const ChatList = () => {
                           </AvatarFallback>
                         </Avatar>
                         {chat.unread_count > 0 && (
-                          <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs" variant="destructive">
+                          <Badge
+                            className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
+                            variant="destructive"
+                          >
                             {chat.unread_count}
                           </Badge>
                         )}
                       </div>
+
+                      {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold truncate">{other?.full_name || 'Unknown'}</h3>
-                            {chat.type === 'complaint' && (
-                              <Badge variant="outline" className="text-xs text-destructive border-destructive/30">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Complaint
-                              </Badge>
-                            )}
-                            {chat.is_locked && <Lock className="h-3 w-3 text-muted-foreground" />}
-                          </div>
+                        {/* Row 1: nama + badges + timestamp */}
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          {/* Nama — truncate kalau kepanjangan */}
+                          <h3 className="font-semibold truncate min-w-0 flex-1">
+                            {other?.full_name || 'Unknown'}
+                          </h3>
+
+                          {/* Badge complaint — shrink-0 biar tidak kempes */}
+                          {chat.type === 'complaint' && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-destructive border-destructive/30 shrink-0 whitespace-nowrap"
+                            >
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Complaint
+                            </Badge>
+                          )}
+
+                          {/* Lock icon */}
+                          {!!chat.is_locked && (
+                            <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                          )}
+
+                          {/* Timestamp — paling kanan, tidak wrap */}
                           {chat.last_message_at && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap ml-auto pl-1">
                               {formatDistanceToNow(new Date(chat.last_message_at), { addSuffix: true })}
                             </span>
                           )}
                         </div>
+
+                        {/* Row 2: event name */}
                         {chat.event_name && (
-                          <p className="text-xs text-muted-foreground mb-0.5">{chat.event_name}</p>
+                          <p className="text-xs text-muted-foreground truncate mb-0.5">
+                            {chat.event_name}
+                          </p>
                         )}
+
+                        {/* Row 3: last message */}
                         <p className={`text-sm truncate ${chat.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                           {chat.last_message || 'No messages yet'}
                         </p>
