@@ -4,7 +4,6 @@ const LANGUAGES = ["cURL", "JavaScript", "TypeScript", "PHP", "Go", "Rust", "Jav
 type Language = typeof LANGUAGES[number];
 type Endpoint = "analyze" | "upload" | "match" | "usage";
 
-// ✅ FIXED: Semua /api/v1/* menggunakan X-Api-Key header, BUKAN Authorization: Bearer
 const CODE_EXAMPLES: Record<Endpoint, Record<Language, string>> = {
   analyze: {
     cURL: `curl -X POST https://api.ambilfoto.id/api/v1/photo/analyze \\
@@ -161,7 +160,6 @@ def analyze_photo(image_base64: str) -> dict:
 data = analyze_photo("data:image/jpeg;base64,...")
 print(data["embedding"])`,
   },
-
   upload: {
     cURL: `curl -X POST https://api.ambilfoto.id/api/v1/photo/upload \\
   -H "X-Api-Key: af_prod_xxx" \\
@@ -313,7 +311,6 @@ var req = HttpRequest.newBuilder()
 data = response.json()
 print(f"Photo ID: {data['photo_id']}")`,
   },
-
   match: {
     cURL: `curl -X POST https://api.ambilfoto.id/api/v1/photo/match \\
   -H "X-Api-Key: af_prod_xxx" \\
@@ -405,7 +402,6 @@ photos = response.json()["photos"]
 for p in photos:
     print(p["filename"], p["similarity"])`,
   },
-
   usage: {
     cURL: `curl https://api.ambilfoto.id/api/v1/usage \\
   -H "X-Api-Key: af_prod_xxx"`,
@@ -541,14 +537,14 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
 
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${dotClass}`} />
-          <span className="text-xs font-mono font-semibold text-slate-300">{lang}</span>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
+          <span className="text-xs font-mono font-semibold text-slate-300 truncate">{lang}</span>
         </div>
         <button
           onClick={copy}
-          className={`text-xs px-3 py-1 rounded-md border transition-all duration-200 cursor-pointer
+          className={`text-xs px-2.5 py-1 rounded-md border transition-all duration-200 cursor-pointer flex-shrink-0 ml-2
             ${copied
               ? "border-emerald-400 text-emerald-400 bg-emerald-400/10"
               : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
@@ -557,7 +553,8 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
           {copied ? "✓ Copied" : "Copy"}
         </button>
       </div>
-      <pre className="bg-slate-900 m-0 px-5 py-4 overflow-x-auto text-sm leading-relaxed text-slate-100 font-mono">
+      {/* KEY FIX: max-w-full + overflow-x-auto prevents horizontal bleed on mobile */}
+      <pre className="bg-slate-900 m-0 px-4 py-4 overflow-x-auto text-xs sm:text-sm leading-relaxed text-slate-100 font-mono max-w-full">
         <code>{code}</code>
       </pre>
     </div>
@@ -576,7 +573,8 @@ function LangTabs({
 }) {
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-3">
+      {/* Scrollable row on mobile so pills don't wrap excessively */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
         {LANGUAGES.map((lang) => {
           const s = LANG_STYLE[lang];
           const isActive = activeLang === lang;
@@ -584,7 +582,7 @@ function LangTabs({
             <button
               key={lang}
               onClick={() => setActiveLang(lang)}
-              className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 cursor-pointer
+              className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0
                 ${isActive ? s.active : `${s.pill} hover:opacity-80`}`}
             >
               {lang}
@@ -616,15 +614,16 @@ function EndpointSection({ method, path, description, endpoint }: EndpointProps)
   return (
     <div>
       <div className="mb-5">
-        <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-          <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-md border ${methodCls}`}>
+        {/* Stack on mobile, inline on sm+ */}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-md border flex-shrink-0 ${methodCls}`}>
             {method}
           </span>
-          <code className="text-sm font-mono text-slate-700 bg-slate-100 border border-slate-200 px-3 py-0.5 rounded-md">
+          {/* Path truncates and scrolls on tiny screens */}
+          <code className="text-xs sm:text-sm font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 sm:px-3 py-0.5 rounded-md overflow-x-auto max-w-full">
             {path}
           </code>
-          {/* ✅ Badge X-Api-Key untuk semua endpoint v1 */}
-          <span className="text-xs font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+          <span className="text-xs font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex-shrink-0">
             X-Api-Key
           </span>
         </div>
@@ -643,6 +642,43 @@ function EndpointSection({ method, path, description, endpoint }: EndpointProps)
           <CodeBlock code={RESPONSES[endpoint]} lang="JSON" />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── MobileNav ─────────────────────────────────────────────────── */
+function MobileNav({ activeSection, onSelect }: { activeSection: string; onSelect: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = SECTIONS.find((s) => s.id === activeSection);
+
+  return (
+    <div className="lg:hidden border-b border-slate-200 bg-white sticky top-14 z-40">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-700 font-medium"
+      >
+        <span className="truncate">{current?.label ?? "Menu"}</span>
+        <span className="ml-2 text-slate-400 flex-shrink-0">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 bg-white shadow-lg">
+          {SECTIONS.map(({ id, label }) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              onClick={() => { setOpen(false); onSelect(id); }}
+              className={`block px-5 py-2.5 text-sm transition-colors
+                ${activeSection === id
+                  ? "text-blue-600 font-semibold bg-blue-50"
+                  : "text-slate-600 hover:bg-slate-50"
+                }`}
+              style={{ textDecoration: "none" }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -681,35 +717,38 @@ export default function DeveloperDocs() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
 
       {/* ── HEADER ─────────────────────────────────────────────── */}
-      <header className="docs-header sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 h-14 flex items-center justify-between px-6">
-        <div className="flex items-center gap-3">
+      <header className="docs-header sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 h-14 flex items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <img
             src="https://res.cloudinary.com/dwyi4d3rq/image/upload/v1765171746/ambilfoto-logo_hvn8s2.png"
             alt="AmbilFoto.id"
-            className="h-8 w-auto"
+            className="h-7 sm:h-8 w-auto flex-shrink-0"
           />
-          <span className="text-slate-300 select-none">/</span>
-          <span className="text-sm text-slate-500 font-medium">API Reference</span>
+          <span className="text-slate-300 select-none hidden sm:inline">/</span>
+          <span className="text-xs sm:text-sm text-slate-500 font-medium hidden sm:inline truncate">API Reference</span>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 hidden sm:inline">
             v1
           </span>
           <a href="/developer/pricing">
-            <button className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer">
+            <button className="text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer whitespace-nowrap">
               Get API Key →
             </button>
           </a>
         </div>
       </header>
 
+      {/* ── MOBILE NAV DROPDOWN ─────────────────────────────────── */}
+      <MobileNav activeSection={activeSection} onSelect={setActiveSection} />
+
       <div className="flex max-w-screen-xl mx-auto">
 
-        {/* ── SIDEBAR ────────────────────────────────────────────── */}
+        {/* ── SIDEBAR (desktop only) ──────────────────────────── */}
         <aside className="docs-sidebar hidden lg:block w-56 shrink-0 sticky top-14 h-[calc(100vh-56px)] overflow-y-auto border-r border-slate-200 py-6">
           <p className="px-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
             API Reference
@@ -739,18 +778,19 @@ export default function DeveloperDocs() {
         </aside>
 
         {/* ── MAIN ───────────────────────────────────────────────── */}
-        <main className="flex-1 min-w-0 px-8 lg:px-12 py-10 max-w-3xl">
+        {/* px responsive: tight on mobile, generous on desktop */}
+        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-12 py-8 sm:py-10 w-full">
 
           {/* Quick Start */}
-          <div id="quickstart" className="content-block mb-12 pb-12 border-b border-slate-100">
+          <div id="quickstart" className="content-block mb-10 sm:mb-12 pb-10 sm:pb-12 border-b border-slate-100">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-3 py-1 mb-4">
               ⚡ Quick Start
             </span>
-            <h1 className="text-4xl font-extrabold text-slate-900 leading-tight mb-3">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight mb-3">
               AmbilFoto API<br />
               <span className="text-blue-600">Reference</span>
             </h1>
-            <p className="text-base text-slate-500 leading-relaxed max-w-xl mb-8">
+            <p className="text-sm sm:text-base text-slate-500 leading-relaxed max-w-xl mb-6 sm:mb-8">
               Integrate AI-powered face recognition into your app. Detect, index, and match faces across thousands of event photos in milliseconds.
             </p>
 
@@ -762,7 +802,7 @@ export default function DeveloperDocs() {
                 { n: "04", title: "Get your API keys",    desc: "Keys sent via email and available in dashboard" },
                 { n: "05", title: "Start integrating",    desc: "Use the examples below to make your first request" },
               ].map((s) => (
-                <div key={s.n} className="flex items-start gap-3.5 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-colors">
+                <div key={s.n} className="flex items-start gap-3 px-3 sm:px-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-colors">
                   <span className="text-[11px] font-bold font-mono text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md shrink-0 mt-0.5">
                     {s.n}
                   </span>
@@ -776,17 +816,17 @@ export default function DeveloperDocs() {
           </div>
 
           {/* Authentication */}
-          <section id="authentication" className="content-block mb-12 pb-12 border-b border-slate-100">
+          <section id="authentication" className="content-block mb-10 sm:mb-12 pb-10 sm:pb-12 border-b border-slate-100">
             <div className="flex items-center gap-2.5 mb-2">
               <span className="text-xl">🔑</span>
-              <h2 className="text-2xl font-bold text-slate-900">Authentication</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Authentication</h2>
             </div>
             <p className="text-sm text-slate-500 mb-5 leading-relaxed">
               AmbilFoto menggunakan <strong>dua jenis autentikasi</strong> yang berbeda tergantung endpoint yang diakses.
             </p>
 
-            {/* ✅ Dua kolom: JWT vs X-Api-Key */}
-            <div className="grid md:grid-cols-2 gap-4 mb-5">
+            {/* Stack on mobile, 2-col on md+ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
               <div className="border border-violet-200 rounded-xl p-4 bg-violet-50/40">
                 <p className="text-xs font-bold text-violet-600 uppercase tracking-widest mb-2">
                   🔐 JWT Bearer Token
@@ -810,7 +850,6 @@ export default function DeveloperDocs() {
               </div>
             </div>
 
-            {/* Key format */}
             <div className="grid gap-2 mb-4">
               <div>
                 <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-1.5">
@@ -826,10 +865,9 @@ export default function DeveloperDocs() {
               </div>
             </div>
 
-            {/* ✅ Warning jangan pakai Bearer di v1 */}
             <div className="flex gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
               <span className="shrink-0">🚫</span>
-              <p>
+              <p className="text-xs sm:text-sm leading-relaxed">
                 <strong>Jangan</strong> gunakan{" "}
                 <code className="text-xs bg-white border border-red-200 px-1.5 rounded font-mono">Authorization: Bearer</code>{" "}
                 untuk endpoint <code className="text-xs bg-white border border-red-200 px-1.5 rounded font-mono">/api/v1/*</code>.
@@ -839,7 +877,7 @@ export default function DeveloperDocs() {
 
             <div className="flex gap-3 p-3.5 mt-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
               <span className="shrink-0">💡</span>
-              <p>
+              <p className="text-xs sm:text-sm leading-relaxed">
                 Gunakan <code className="text-xs bg-white border border-amber-200 px-1.5 rounded font-mono">af_dev_xxx</code> untuk testing — fitur sama, tidak berdampak ke produksi.
                 Switch ke <code className="text-xs bg-white border border-amber-200 px-1.5 rounded font-mono">af_prod_xxx</code> untuk live traffic.
               </p>
@@ -875,19 +913,19 @@ export default function DeveloperDocs() {
               },
             ] as { id: Endpoint; method: "POST" | "GET"; path: string; description: string }[]
           ).map(({ id, method, path, description }) => (
-            <section key={id} id={id} className="content-block mb-12 pb-12 border-b border-slate-100">
-              <div className="border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+            <section key={id} id={id} className="content-block mb-10 sm:mb-12 pb-10 sm:pb-12 border-b border-slate-100">
+              <div className="border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
                 <EndpointSection method={method} path={path} description={description} endpoint={id} />
               </div>
             </section>
           ))}
 
           {/* Error Reference */}
-          <section id="errors" className="content-block mb-12">
-            <div className="border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+          <section id="errors" className="content-block mb-10 sm:mb-12">
+            <div className="border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
               <div className="flex items-center gap-2.5 mb-2">
                 <span className="text-xl">📖</span>
-                <h2 className="text-2xl font-bold text-slate-900">Error Reference</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Error Reference</h2>
               </div>
               <p className="text-sm text-slate-500 mb-5">All errors return a consistent JSON envelope:</p>
 
@@ -899,12 +937,13 @@ export default function DeveloperDocs() {
   "limit_rpm": 60
 }`} />
 
-              <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-sm border-collapse">
+              {/* Table: scrollable on mobile */}
+              <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 -mx-0">
+                <table className="w-full text-sm border-collapse min-w-[480px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       {["HTTP", "Penyebab", "Solusi"].map((h) => (
-                        <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <th key={h} className="text-left px-3 sm:px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                           {h}
                         </th>
                       ))}
@@ -927,13 +966,13 @@ export default function DeveloperDocs() {
                       };
                       return (
                         <tr key={desc} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-3">
                             <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded border ${codeCls[color]}`}>
                               {code}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-slate-600 text-sm">{desc}</td>
-                          <td className="px-4 py-3 text-slate-400 text-xs">{fix}</td>
+                          <td className="px-3 sm:px-4 py-3 text-slate-600 text-xs sm:text-sm">{desc}</td>
+                          <td className="px-3 sm:px-4 py-3 text-slate-400 text-xs">{fix}</td>
                         </tr>
                       );
                     })}
@@ -944,19 +983,19 @@ export default function DeveloperDocs() {
           </section>
 
           {/* CTA */}
-          <div className="content-block text-center px-8 py-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
-            <p className="text-3xl font-extrabold text-slate-900 mb-2">Ready to integrate?</p>
-            <p className="text-sm text-slate-500 mb-7">
+          <div className="content-block text-center px-4 sm:px-8 py-10 sm:py-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
+            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">Ready to integrate?</p>
+            <p className="text-sm text-slate-500 mb-6 sm:mb-7">
               Choose a plan and get your API keys in minutes. Start with the development sandbox key.
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <a href="/developer/pricing">
-                <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer shadow-sm">
+                <button className="px-5 sm:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer shadow-sm">
                   View Pricing Plans →
                 </button>
               </a>
               <a href="/developer/dashboard">
-                <button className="px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-xl border border-slate-200 transition-colors cursor-pointer">
+                <button className="px-5 sm:px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-xl border border-slate-200 transition-colors cursor-pointer">
                   Go to Dashboard
                 </button>
               </a>
