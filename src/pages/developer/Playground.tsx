@@ -105,7 +105,7 @@ const PRESET_ENDPOINTS = [
     label: "Analyze Photo",
     method: "POST" as HttpMethod,
     path: "/photo/analyze",
-    description: "Analisis foto menggunakan AI — tags, label, dan metadata",
+    description: "Analisis foto via AI — tags, label, metadata",
     body: JSON.stringify({
       image_url: "https://example.com/photo.jpg",
       options: { tags: true, faces: false, nsfw: true },
@@ -117,7 +117,7 @@ const PRESET_ENDPOINTS = [
     label: "Match Photos",
     method: "POST" as HttpMethod,
     path: "/photo/match",
-    description: "Cari foto yang mirip secara visual dari database",
+    description: "Cari foto mirip secara visual dari database",
     body: JSON.stringify({
       image_url: "https://example.com/query.jpg",
       threshold: 0.8,
@@ -130,7 +130,7 @@ const PRESET_ENDPOINTS = [
     label: "Upload Photo",
     method: "POST" as HttpMethod,
     path: "/photo/upload",
-    description: "Upload foto (menggunakan kuota upload). Gunakan multipart/form-data.",
+    description: "Upload foto (kuota upload). Gunakan multipart/form-data.",
     body: JSON.stringify({ title: "My Photo", description: "Optional description" }, null, 2),
     contentType: "multipart/form-data",
     icon: "📤",
@@ -176,7 +176,7 @@ const getStatusMeta = (status: number | null) => {
 const MethodBadge = ({ method, size = "sm" }: { method: string; size?: "sm" | "xs" }) => {
   const s = METHOD_STYLES[method as HttpMethod] ?? METHOD_STYLES.GET;
   return (
-    <span className={`font-mono font-bold border rounded px-1.5 ${s.bg} ${s.text} ${s.border} ${size === "xs" ? "text-[10px] py-0" : "text-xs py-0.5"}`}>
+    <span className={`font-mono font-bold border rounded px-1.5 shrink-0 ${s.bg} ${s.text} ${s.border} ${size === "xs" ? "text-[10px] py-0" : "text-xs py-0.5"}`}>
       {method}
     </span>
   );
@@ -193,8 +193,6 @@ const DeveloperPlayground = () => {
   const [selectedKeyId, setSelectedKeyId] = useState<string>("");
   const [showRawKey, setShowRawKey] = useState(false);
   const [keysLoading, setKeysLoading] = useState(true);
-  // rawKey — key asli yang di-paste user. Disimpan di sessionStorage saja
-  // (otomatis hilang saat tab/browser ditutup, tidak pernah ke localStorage)
   const [rawKey, setRawKey] = useState<string>(() =>
     typeof window !== "undefined" ? (sessionStorage.getItem("pg_raw_key") ?? "") : ""
   );
@@ -217,7 +215,6 @@ const DeveloperPlayground = () => {
     sessionStorage.removeItem("pg_raw_key");
   };
 
-  // Deteksi prefix dari key untuk cocokkan ke key object yang sesuai
   const matchKeyFromRaw = (raw: string): ApiKey | null => {
     if (!raw.trim()) return null;
     return keys.find((k) => raw.trim().startsWith(k.key_prefix) && Boolean(k.is_active)) ?? null;
@@ -260,7 +257,6 @@ const DeveloperPlayground = () => {
       .then((res) => {
         if (res.success) {
           setKeys(res.data);
-          // is_active bisa 0/1 integer dari backend — normalise ke boolean
           const active = res.data.find((k) => Boolean(k.is_active) && k.key_type === "dev")
             ?? res.data.find((k) => Boolean(k.is_active));
           if (active) setSelectedKeyId(active.id);
@@ -315,8 +311,6 @@ const DeveloperPlayground = () => {
     headers.filter((h) => h.enabled && h.key.trim()).forEach((h) => {
       reqHeaders[h.key] = h.value;
     });
-
-    // ✅ Gunakan key asli yang di-paste user — bukan key_preview
     reqHeaders["X-API-Key"] = rawKey.trim();
 
     try {
@@ -364,7 +358,6 @@ const DeveloperPlayground = () => {
       const duration = Math.round(performance.now() - start);
       const msg = err instanceof Error ? err.message : "Network error";
 
-      // CORS / network error — tunjukkan info yang berguna
       setResponse({
         status: 0,
         statusText: "Network Error",
@@ -372,7 +365,7 @@ const DeveloperPlayground = () => {
         body: {
           error: msg,
           hint: msg.includes("CORS") || msg.includes("fetch")
-            ? "CORS error: Pastikan server API mengizinkan origin browser kamu, atau gunakan proxy. Lihat dokumentasi API untuk setup CORS."
+            ? "CORS error: Pastikan server API mengizinkan origin browser kamu."
             : "Pastikan server API berjalan dan URL sudah benar.",
         },
         duration,
@@ -433,20 +426,21 @@ const DeveloperPlayground = () => {
 
   return (
     <DeveloperLayout developerId={id}>
-      <div className="space-y-5">
+      {/* Prevent any child from pushing past viewport width */}
+      <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
 
         {/* ── Header ── */}
         <div className="flex items-start justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <FlaskConical className="h-6 w-6 text-primary" />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
               API Playground
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">
+            <p className="text-muted-foreground text-xs sm:text-sm mt-1">
               Test endpoint API langsung dari browser — seperti Postman, tanpa install apapun.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {history.length > 0 && (
               <Button
                 variant="outline"
@@ -455,7 +449,7 @@ const DeveloperPlayground = () => {
                 onClick={() => setShowHistory((p) => !p)}
               >
                 <History className="h-3.5 w-3.5" />
-                Riwayat ({history.length})
+                <span className="hidden sm:inline">Riwayat</span> ({history.length})
                 {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
             )}
@@ -463,12 +457,15 @@ const DeveloperPlayground = () => {
         </div>
 
         {/* ── CORS notice ── */}
-        <div className="rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30 px-4 py-3 flex items-start gap-3">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30 px-3 sm:px-4 py-3 flex items-start gap-2.5">
           <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
-          <div className="text-sm text-sky-700 dark:text-sky-300 space-y-0.5">
-            <p className="font-medium">Cara penggunaan Playground</p>
-            <p className="text-xs opacity-80">
-              Request dikirim langsung dari browser. Pastikan server API kamu mengaktifkan <code className="bg-sky-100 dark:bg-sky-900 px-1 rounded">CORS</code> untuk origin ini, atau jalankan dari localhost yang sama. Key kamu dikirim via header <code className="bg-sky-100 dark:bg-sky-900 px-1 rounded">X-API-Key</code>.
+          <div className="text-sky-700 dark:text-sky-300 space-y-0.5 min-w-0">
+            <p className="text-xs sm:text-sm font-medium">Cara penggunaan Playground</p>
+            <p className="text-[11px] sm:text-xs opacity-80 leading-relaxed">
+              Request dikirim langsung dari browser. Pastikan server API kamu mengaktifkan{" "}
+              <code className="bg-sky-100 dark:bg-sky-900 px-1 rounded">CORS</code> untuk origin ini.
+              Key dikirim via header{" "}
+              <code className="bg-sky-100 dark:bg-sky-900 px-1 rounded">X-API-Key</code>.
             </p>
           </div>
         </div>
@@ -493,7 +490,7 @@ const DeveloperPlayground = () => {
                   return (
                     <button
                       key={h.id}
-                      className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs hover:bg-muted/50 transition-colors text-left group"
+                      className="w-full flex items-center gap-2 rounded-lg px-2 sm:px-3 py-2 text-xs hover:bg-muted/50 transition-colors text-left group"
                       onClick={() => {
                         setMethod(h.method as HttpMethod);
                         try {
@@ -504,22 +501,19 @@ const DeveloperPlayground = () => {
                       }}
                     >
                       <MethodBadge method={h.method} size="xs" />
-                      <span className="flex-1 truncate font-mono text-muted-foreground group-hover:text-foreground">
+                      <span className="flex-1 truncate font-mono text-muted-foreground group-hover:text-foreground min-w-0">
                         {h.url}
                       </span>
                       {h.status ? (
-                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${s.color}`}>
+                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold shrink-0 ${s.color}`}>
                           {h.status}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-rose-400">ERR</span>
+                        <span className="text-[10px] text-rose-400 shrink-0">ERR</span>
                       )}
                       {h.duration !== null && (
-                        <span className="text-muted-foreground/60 tabular-nums">{h.duration}ms</span>
+                        <span className="text-muted-foreground/60 tabular-nums shrink-0 hidden sm:block">{h.duration}ms</span>
                       )}
-                      <span className="text-muted-foreground/40 tabular-nums hidden sm:block">
-                        {format(h.timestamp, "HH:mm:ss")}
-                      </span>
                     </button>
                   );
                 })}
@@ -528,17 +522,17 @@ const DeveloperPlayground = () => {
           </Card>
         )}
 
-        {/* ── Main grid ── */}
-        <div className="grid gap-5 xl:grid-cols-[1fr_440px]">
+        {/* ── Main grid: stacked on mobile, side-by-side on xl ── */}
+        <div className="grid gap-4 xl:grid-cols-[1fr_440px]">
 
           {/* ═══════ LEFT: Request Builder ═══════ */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
 
             {/* Step 1 — API Key Input */}
             <Card className={`shadow-soft transition-all ${rawKeyError ? "ring-2 ring-destructive/50 border-destructive/50" : ""}`}>
               <CardContent className="pt-4 pb-4 space-y-3">
-                {/* Title */}
-                <div className="flex items-center justify-between">
+                {/* Title row */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <div className="h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">1</div>
                     <span className="text-sm font-semibold">Masukkan API Key</span>
@@ -549,8 +543,8 @@ const DeveloperPlayground = () => {
                     )}
                   </div>
                   {rawKey.trim() && (
-                    <button onClick={clearRawKey} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors">
-                      <Trash2 className="h-3 w-3" /> Hapus key
+                    <button onClick={clearRawKey} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors shrink-0">
+                      <Trash2 className="h-3 w-3" /> Hapus
                     </button>
                   )}
                 </div>
@@ -559,21 +553,21 @@ const DeveloperPlayground = () => {
                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-800">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
                   <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                    Paste <strong>key asli</strong> kamu di sini — key asli hanya ditampilkan <strong>sekali saat pertama dibuat atau di-regenerate</strong> di halaman API Keys. Key tidak disimpan permanen, hanya di memory tab ini.
+                    Paste <strong>key asli</strong> di sini — hanya ditampilkan <strong>sekali saat dibuat/di-regenerate</strong>. Tidak disimpan permanen, hanya di memory tab ini.
                   </p>
                 </div>
 
-                {/* Input */}
-                <div className="relative">
+                {/* Input — overflow handled by min-w-0 on parent */}
+                <div className="relative min-w-0">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <input
                     type={rawKeyVisible ? "text" : "password"}
                     value={rawKey}
                     onChange={(e) => handleRawKeyChange(e.target.value)}
-                    placeholder="af_dev_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    placeholder="af_dev_xxxx…"
                     spellCheck={false}
                     autoComplete="off"
-                    className={`w-full pl-9 pr-20 py-2.5 rounded-lg border font-mono text-sm bg-background transition-colors
+                    className={`w-full min-w-0 pl-9 pr-10 py-2.5 rounded-lg border font-mono text-xs sm:text-sm bg-background transition-colors
                       focus:outline-none focus:ring-2 focus:ring-primary/30
                       ${rawKeyError ? "border-destructive bg-destructive/5" : "border-input hover:border-muted-foreground/40"}
                     `}
@@ -586,17 +580,18 @@ const DeveloperPlayground = () => {
                     {rawKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+
                 {rawKeyError && (
                   <p className="text-xs text-destructive flex items-center gap-1">
                     <XCircle className="h-3.5 w-3.5" /> API key wajib diisi sebelum mengirim request.
                   </p>
                 )}
 
-                {/* Key info panel — tampil jika key cocok dengan salah satu key di akun */}
+                {/* Key match info */}
                 {rawKey.trim() && (() => {
                   const matched = matchKeyFromRaw(rawKey);
                   return matched ? (
-                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800">
+                    <div className="flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800">
                       <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${matched.key_type === "prod" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-sky-100 dark:bg-sky-900/30"}`}>
                         <Key className={`h-3.5 w-3.5 ${matched.key_type === "prod" ? "text-amber-600" : "text-sky-600"}`} />
                       </div>
@@ -614,24 +609,24 @@ const DeveloperPlayground = () => {
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/30 border border-border">
                       <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                       <p className="text-[11px] text-muted-foreground">
-                        Key dikenali. Header <code className="bg-muted px-1 rounded font-mono">X-API-Key</code> akan dikirim dengan value ini.
+                        Header <code className="bg-muted px-1 rounded font-mono">X-API-Key</code> akan dikirim dengan value ini.
                       </p>
                     </div>
                   );
                 })()}
 
-                {/* Keys di akun (referensi) */}
+                {/* Active keys reference */}
                 {!keysLoading && activeKeys.length > 0 && (
                   <div>
                     <p className="text-[11px] text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Shield className="h-3 w-3" /> Key aktif di akunmu (untuk referensi prefix):
+                      <Shield className="h-3 w-3" /> Key aktif di akunmu (referensi prefix):
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {activeKeys.map((k) => (
                         <div key={k.id} className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/40 border border-border text-[11px] font-mono">
-                          <span className={`h-1.5 w-1.5 rounded-full ${k.key_type === "prod" ? "bg-amber-500" : "bg-sky-500"}`} />
-                          {k.key_preview}
-                          <span className="text-muted-foreground/60 capitalize">({k.key_type})</span>
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${k.key_type === "prod" ? "bg-amber-500" : "bg-sky-500"}`} />
+                          <span className="truncate max-w-[120px] sm:max-w-none">{k.key_preview}</span>
+                          <span className="text-muted-foreground/60 capitalize shrink-0">({k.key_type})</span>
                         </div>
                       ))}
                     </div>
@@ -648,68 +643,65 @@ const DeveloperPlayground = () => {
                   <span className="text-sm font-semibold">Pilih Endpoint</span>
                 </div>
 
-                {/* Presets */}
+                {/* Presets — 1 col on xs, 2 col on sm+ */}
                 <div>
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
                     <Sparkles className="h-3 w-3" /> Quick start — klik untuk langsung isi form:
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {PRESET_ENDPOINTS.map((preset) => (
                       <button
                         key={preset.label}
                         onClick={() => applyPreset(preset)}
-                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all hover:shadow-sm ${
+                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all hover:shadow-sm w-full min-w-0 ${
                           path === preset.path && method === preset.method
                             ? "border-primary/40 bg-primary/5"
                             : "border-border hover:border-muted-foreground/30 hover:bg-muted/30"
                         }`}
                       >
                         <span className="text-base shrink-0 mt-0.5">{preset.icon}</span>
-                        <div>
-                          <div className="flex items-center gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <MethodBadge method={preset.method} size="xs" />
                             <span className="text-xs font-medium">{preset.label}</span>
                           </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{preset.description}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight line-clamp-2">{preset.description}</p>
                         </div>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* URL Bar */}
+                {/* URL Bar — stack vertically on mobile */}
                 <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
-                      <SelectTrigger className={`w-28 font-mono font-bold text-xs h-10 border ${METHOD_STYLES[method].bg} ${METHOD_STYLES[method].text} ${METHOD_STYLES[method].border}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HTTP_METHODS.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            <MethodBadge method={m} />
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {/* Row 1: Method + Send button (mobile), full bar (desktop) */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* Method + path on mobile: method select above, path below */}
+                    <div className="flex gap-2 sm:flex-1 min-w-0">
+                      <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
+                        <SelectTrigger className={`w-24 sm:w-28 font-mono font-bold text-xs h-10 border shrink-0 ${METHOD_STYLES[method].bg} ${METHOD_STYLES[method].text} ${METHOD_STYLES[method].border}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HTTP_METHODS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              <MethodBadge method={m} />
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                    <div className="flex flex-1 min-w-0">
-                      <Input
-                        value={baseUrl}
-                        onChange={(e) => setBaseUrl(e.target.value)}
-                        className="rounded-r-none h-10 font-mono text-xs border-r-0 text-muted-foreground bg-muted/30 w-48 shrink-0"
-                        placeholder="Base URL"
-                      />
+                      {/* Path input only — base URL moved below on mobile */}
                       <Input
                         value={path}
                         onChange={(e) => setPath(e.target.value)}
-                        className="rounded-l-none h-10 font-mono text-xs flex-1 min-w-0"
+                        className="h-10 font-mono text-xs flex-1 min-w-0"
                         placeholder="/endpoint"
                       />
                     </div>
 
                     <Button
-                      className="h-10 px-5 gap-2 shrink-0 font-semibold"
+                      className="h-10 px-4 sm:px-5 gap-2 font-semibold w-full sm:w-auto"
                       onClick={sendRequest}
                       disabled={loading || !selectedKeyId}
                     >
@@ -720,11 +712,22 @@ const DeveloperPlayground = () => {
                     </Button>
                   </div>
 
+                  {/* Base URL — separate row, collapsible feel */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground shrink-0 font-mono">BASE</span>
+                    <Input
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      className="h-8 font-mono text-xs text-muted-foreground bg-muted/30 flex-1 min-w-0"
+                      placeholder="Base URL"
+                    />
+                  </div>
+
                   {/* URL preview */}
-                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg min-w-0">
                     <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <code className="text-[11px] text-muted-foreground truncate flex-1 font-mono">{buildUrl()}</code>
-                    <button onClick={() => copyText(buildUrl(), "url")} className="text-muted-foreground hover:text-foreground shrink-0">
+                    <code className="text-[10px] sm:text-[11px] text-muted-foreground truncate flex-1 font-mono min-w-0">{buildUrl()}</code>
+                    <button onClick={() => copyText(buildUrl(), "url")} className="text-muted-foreground hover:text-foreground shrink-0 ml-1">
                       {copied === "url" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   </div>
@@ -745,7 +748,7 @@ const DeveloperPlayground = () => {
                     <TabsTrigger value="headers" className="text-xs h-7 flex-1">
                       Headers
                       {headers.filter((h) => h.enabled && h.key).length > 0 && (
-                        <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 h-4">
+                        <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4 hidden sm:inline-flex">
                           {headers.filter((h) => h.enabled && h.key).length}
                         </Badge>
                       )}
@@ -753,7 +756,7 @@ const DeveloperPlayground = () => {
                     <TabsTrigger value="params" className="text-xs h-7 flex-1">
                       Params
                       {params.filter((p) => p.enabled && p.key).length > 0 && (
-                        <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 h-4">
+                        <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4 hidden sm:inline-flex">
                           {params.filter((p) => p.enabled && p.key).length}
                         </Badge>
                       )}
@@ -767,14 +770,14 @@ const DeveloperPlayground = () => {
                   {/* Headers */}
                   <TabsContent value="headers" className="mt-4 space-y-2">
                     {headers.map((h) => (
-                      <div key={h.id} className="flex items-center gap-2">
+                      <div key={h.id} className="flex items-center gap-1.5 sm:gap-2">
                         <input type="checkbox" checked={h.enabled}
                           onChange={(e) => updateRow(setHeaders, h.id, "enabled", e.target.checked)}
                           className="accent-primary h-3.5 w-3.5 shrink-0" />
                         <Input value={h.key} onChange={(e) => updateRow(setHeaders, h.id, "key", e.target.value)}
-                          placeholder="Header name" className="h-8 text-xs font-mono flex-1" />
+                          placeholder="Header" className="h-8 text-xs font-mono flex-1 min-w-0" />
                         <Input value={h.value} onChange={(e) => updateRow(setHeaders, h.id, "value", e.target.value)}
-                          placeholder="Value" className="h-8 text-xs font-mono flex-1" />
+                          placeholder="Value" className="h-8 text-xs font-mono flex-1 min-w-0" />
                         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                           onClick={() => removeRow(setHeaders, h.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
@@ -788,7 +791,7 @@ const DeveloperPlayground = () => {
                     <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-800">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
                       <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                        Header <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">X-API-Key</code> sudah otomatis dikirim dari key yang kamu pilih di atas. Tidak perlu tambah manual.
+                        Header <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">X-API-Key</code> sudah otomatis dikirim. Tidak perlu tambah manual.
                       </p>
                     </div>
                   </TabsContent>
@@ -796,14 +799,14 @@ const DeveloperPlayground = () => {
                   {/* Query Params */}
                   <TabsContent value="params" className="mt-4 space-y-2">
                     {params.map((p) => (
-                      <div key={p.id} className="flex items-center gap-2">
+                      <div key={p.id} className="flex items-center gap-1.5 sm:gap-2">
                         <input type="checkbox" checked={p.enabled}
                           onChange={(e) => updateRow(setParams, p.id, "enabled", e.target.checked)}
                           className="accent-primary h-3.5 w-3.5 shrink-0" />
                         <Input value={p.key} onChange={(e) => updateRow(setParams, p.id, "key", e.target.value)}
-                          placeholder="Parameter" className="h-8 text-xs font-mono flex-1" />
+                          placeholder="Parameter" className="h-8 text-xs font-mono flex-1 min-w-0" />
                         <Input value={p.value} onChange={(e) => updateRow(setParams, p.id, "value", e.target.value)}
-                          placeholder="Value" className="h-8 text-xs font-mono flex-1" />
+                          placeholder="Value" className="h-8 text-xs font-mono flex-1 min-w-0" />
                         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                           onClick={() => removeRow(setParams, p.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
@@ -823,7 +826,7 @@ const DeveloperPlayground = () => {
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
                         <p className="text-[11px] text-amber-700 dark:text-amber-300">
                           Endpoint ini menggunakan <strong>multipart/form-data</strong> untuk upload file.
-                          Preview di bawah hanya referensi field — gunakan Postman atau kode langsung untuk kirim file.
+                          Preview di bawah hanya referensi — gunakan Postman untuk kirim file.
                         </p>
                       </div>
                     )}
@@ -838,7 +841,7 @@ const DeveloperPlayground = () => {
                       <div className="absolute top-2 right-2 flex gap-1">
                         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground bg-background/80 backdrop-blur-sm"
                           onClick={formatJSON}>
-                          <Code2 className="h-3 w-3 mr-1" /> Format JSON
+                          <Code2 className="h-3 w-3 mr-1" /> Format
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-muted-foreground bg-background/80 backdrop-blur-sm"
                           onClick={() => setBody("")}>
@@ -857,13 +860,13 @@ const DeveloperPlayground = () => {
           </div>
 
           {/* ═══════ RIGHT: Response ═══════ */}
-          <div ref={responseRef} className="space-y-4">
+          <div ref={responseRef} className="space-y-4 min-w-0">
 
             {/* Response Card */}
-            <Card className="shadow-soft min-h-[440px]">
+            <Card className="shadow-soft">
               <CardHeader className="pb-2 pt-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                     Response
                     {statusMeta && response && (
                       <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${statusMeta.color}`}>
@@ -872,7 +875,7 @@ const DeveloperPlayground = () => {
                     )}
                   </CardTitle>
                   {response && (
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1 tabular-nums">
                         <Clock className="h-3 w-3" /> {response.duration}ms
                       </span>
@@ -891,10 +894,8 @@ const DeveloperPlayground = () => {
               <CardContent>
                 {/* Loading */}
                 {loading && (
-                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
-                    <div className="relative">
-                      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                    </div>
+                  <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-3 text-muted-foreground">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <p className="text-sm font-medium">Mengirim request…</p>
                     <p className="text-xs opacity-50">Menunggu respons dari server</p>
                   </div>
@@ -902,13 +903,13 @@ const DeveloperPlayground = () => {
 
                 {/* Empty state */}
                 {!loading && !response && (
-                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
-                    <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center">
-                      <Terminal className="h-8 w-8 opacity-30" />
+                  <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-3 text-muted-foreground">
+                    <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                      <Terminal className="h-7 w-7 sm:h-8 sm:w-8 opacity-30" />
                     </div>
                     <p className="text-sm font-medium">Respons akan muncul di sini</p>
-                    <p className="text-xs opacity-50">Klik tombol <strong>Kirim</strong> untuk memulai</p>
-                    <div className="flex flex-col items-start gap-1.5 mt-2 p-3 rounded-xl bg-muted/30 text-xs text-muted-foreground max-w-xs">
+                    <p className="text-xs opacity-50 text-center">Klik tombol <strong>Kirim</strong> untuk memulai</p>
+                    <div className="flex flex-col items-start gap-1.5 mt-2 p-3 rounded-xl bg-muted/30 text-xs text-muted-foreground w-full max-w-xs">
                       <p className="font-medium text-foreground flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Tips</p>
                       <p>① Paste API key asli di Step 1</p>
                       <p>② Klik preset endpoint atau isi manual</p>
@@ -932,7 +933,7 @@ const DeveloperPlayground = () => {
 
                     <TabsContent value="body" className="mt-0">
                       <div className="rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800">
-                        <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/80">
+                        <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-zinc-800 bg-zinc-900/80">
                           <div className="flex items-center gap-2">
                             {response.status >= 200 && response.status < 300
                               ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
@@ -943,7 +944,7 @@ const DeveloperPlayground = () => {
                           <span className="text-[10px] text-zinc-500">{response.size}</span>
                         </div>
                         <pre
-                          className="p-4 text-xs font-mono overflow-auto max-h-80 text-zinc-100 leading-relaxed"
+                          className="p-3 sm:p-4 text-[11px] sm:text-xs font-mono overflow-auto max-h-72 sm:max-h-80 text-zinc-100 leading-relaxed"
                           dangerouslySetInnerHTML={{ __html: syntaxHighlight(JSON.stringify(response.body, null, 2)) }}
                         />
                       </div>
@@ -953,11 +954,11 @@ const DeveloperPlayground = () => {
                         <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/10 dark:border-rose-800">
                           <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
                           <div className="text-[11px] text-rose-700 dark:text-rose-300 space-y-1">
-                            {response.status === 401 && <p><strong>401 Unauthorized:</strong> API key tidak valid atau tidak dikirim. Cek header X-API-Key.</p>}
-                            {response.status === 403 && <p><strong>403 Forbidden:</strong> Key aktif tapi tidak punya akses ke endpoint ini.</p>}
+                            {response.status === 401 && <p><strong>401 Unauthorized:</strong> API key tidak valid. Cek header X-API-Key.</p>}
+                            {response.status === 403 && <p><strong>403 Forbidden:</strong> Key aktif tapi tidak punya akses endpoint ini.</p>}
                             {response.status === 429 && <p><strong>429 Too Many Requests:</strong> Rate limit tercapai. Tunggu sebentar.</p>}
-                            {response.status === 0 && <p><strong>Network Error:</strong> Tidak bisa connect ke server. Cek apakah server berjalan dan CORS sudah dikonfigurasi.</p>}
-                            {response.status >= 500 && <p><strong>Server Error:</strong> Ada masalah di server API. Hubungi tim support.</p>}
+                            {response.status === 0 && <p><strong>Network Error:</strong> Tidak bisa connect. Cek server berjalan dan CORS dikonfigurasi.</p>}
+                            {response.status >= 500 && <p><strong>Server Error:</strong> Masalah di server API. Hubungi tim support.</p>}
                           </div>
                         </div>
                       )}
@@ -969,8 +970,8 @@ const DeveloperPlayground = () => {
                           <p className="text-xs text-muted-foreground text-center py-8">Tidak ada response headers</p>
                         ) : (
                           Object.entries(response.headers).map(([k, v], i) => (
-                            <div key={k} className={`flex items-start gap-3 px-3 py-2 text-xs font-mono ${i % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
-                              <span className="text-sky-500 shrink-0 min-w-[160px] truncate">{k}</span>
+                            <div key={k} className={`flex items-start gap-2 sm:gap-3 px-2 sm:px-3 py-2 text-[11px] sm:text-xs font-mono ${i % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
+                              <span className="text-sky-500 shrink-0 w-28 sm:min-w-[160px] truncate">{k}</span>
                               <span className="text-muted-foreground break-all">{v}</span>
                             </div>
                           ))
@@ -992,7 +993,7 @@ const DeveloperPlayground = () => {
               </CardHeader>
               <CardContent>
                 <div className="relative rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
+                  <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
                     <span className="text-[10px] text-zinc-500 font-mono">Terminal / bash</span>
                     <Button
                       variant="ghost" size="sm"
@@ -1003,7 +1004,7 @@ const DeveloperPlayground = () => {
                       {copied === "curl" ? "Tersalin!" : "Salin"}
                     </Button>
                   </div>
-                  <pre className="p-4 text-[11px] font-mono text-zinc-300 overflow-auto whitespace-pre-wrap break-all leading-relaxed max-h-48">
+                  <pre className="p-3 sm:p-4 text-[10px] sm:text-[11px] font-mono text-zinc-300 overflow-auto whitespace-pre-wrap break-all leading-relaxed max-h-48">
                     <span className="text-emerald-400">curl</span>{" "}
                     <span className="text-sky-300">-X {method}</span>{" \\\n"}
                     {"  "}<span className="text-amber-300">"{buildUrl()}"</span>{" \\\n"}
@@ -1022,6 +1023,7 @@ const DeveloperPlayground = () => {
                 </div>
               </CardContent>
             </Card>
+
           </div>
         </div>
       </div>
