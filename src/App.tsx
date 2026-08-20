@@ -81,7 +81,7 @@ import AdminDropboxImport from "./pages/admin/DropboxImport";
 import PhotographerGlobalEventsMap from "./pages/photographer/GlobalEventsMap";
 import PhotographerEventPublicView from "./pages/photographer/PhotographerEventPublicView";
 import DiscoverEvents from "./pages/photographer/DiscoverEvents";
-import ForgotPassword from "./pages/ForgorPassword";
+import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AdminPhotographerStatistics from "./pages/admin/AdminPhotographerStatistics";
 import PhotographerUpgradeRequest from "./pages/user/PhotographerUpgradeRequest";

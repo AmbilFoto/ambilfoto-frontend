@@ -122,7 +122,7 @@ const Register = () => {
         email: formData.email,
         password: formData.password,
         full_name: formData.name,
-        phone_number: formData.phone,
+        phone: formData.phone,
         role: 'user',
         captcha_token: turnstileToken, // ✅ Kirim token Turnstile
       });

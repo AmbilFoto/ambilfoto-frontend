@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/api/auth.service';
 import { Header } from '@/components/layout/Header';
@@ -34,6 +35,7 @@ import { FaceCamera } from '@/components/camera/FaceCamera';
 const Profile = () => {
   const { user, updateUser, logout } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   // State profil
   const [fullName, setFullName] = useState(user?.full_name || '');
@@ -60,6 +62,20 @@ const Profile = () => {
   const [matchedPhotos, setMatchedPhotos] = useState<any[]>([]);
   
   useEffect(() => {
+    // AuthContext bisa aja isinya data lama dari saat login (yang nggak
+    // selalu bawa semua field, misal phone). Refresh langsung dari
+    // /auth/profile begitu halaman dibuka biar form nggak nampilin data basi.
+    authService.getProfile().then((res) => {
+      if (res.success && res.data) {
+        setFullName(res.data.full_name || '');
+        setPhone(res.data.phone || '');
+        updateUser(res.data);
+      }
+    }).catch(() => {
+      // Kalau gagal (misal token expired), biarin fallback ke data
+      // AuthContext yang sudah ada — interceptor axios yang urus redirect 401.
+    });
+
     // Muat foto yang cocok dari localStorage untuk statistik
     const photos = localStorage.getItem('matched_photos');
     if (photos) {
@@ -83,8 +99,11 @@ const Profile = () => {
     setIsUpdatingProfile(true);
     try {
       const response = await authService.updateProfile({ full_name: fullName, phone: phone || undefined });
-      if (response.success && response.data) {
-        updateUser(response.data);
+      if (response.success) {
+        // Backend cuma balikin { success, message } — nggak ada data user
+        // yang di-update, jadi update local state optimistic pakai nilai
+        // yang sudah kita tahu sendiri dari form.
+        updateUser({ ...user, full_name: fullName, phone: phone || user?.phone });
         toast({ title: 'Berhasil', description: 'Profil berhasil diperbarui' });
       } else {
         throw new Error(response.error || 'Gagal memperbarui profil');
@@ -124,8 +143,18 @@ const Profile = () => {
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
-        // Opsional logout pengguna setelah ubah password
-        setTimeout(() => logout(), 2000);
+
+        // FIX: sebelumnya pakai setTimeout(() => logout(), 2000) yang
+        // "lepas" dari lifecycle komponen. Kalau user sempat login ulang
+        // dengan password baru dalam rentang 2 detik itu, timer lama ini
+        // tetap jalan dan menghapus token BARU dari localStorage lewat
+        // logout() — itu sebabnya user terlempar balik ke /login padahal
+        // baru saja berhasil masuk dashboard.
+        //
+        // Sekarang: logout + redirect dieksekusi langsung, tidak ada
+        // jeda/window waktu untuk login ulang diam-diam.
+        logout();
+        navigate('/login', { replace: true });
       } else {
         throw new Error(response.error || 'Gagal mengubah password');
       }
@@ -179,6 +208,7 @@ const Profile = () => {
       if (response.success) {
         toast({ title: 'Akun Dihapus', description: 'Akun Anda telah dihapus. Selamat tinggal!' });
         logout();
+        navigate('/login', { replace: true });
       } else {
         throw new Error(response.error || 'Gagal menghapus akun');
       }
@@ -215,7 +245,6 @@ const Profile = () => {
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={user?.profile_photo} />
                   <AvatarFallback className="text-2xl bg-primary/10 text-primary">
                     {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
                   </AvatarFallback>
@@ -264,34 +293,6 @@ const Profile = () => {
               </div>
             </CardContent>
           </Card>
-          
-          {/* Kartu Informasi Akun 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Informasi Akun
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Calendar className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Anggota Sejak</p>
-                    <p className="font-medium">{formatDate(user?.created_at)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Login Terakhir</p>
-                    <p className="font-medium">{formatDate(user?.last_login)}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>*/}
           
           {/* Tab Pengaturan */}
           <Tabs defaultValue="profile" className="w-full">
