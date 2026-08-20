@@ -341,6 +341,8 @@ const Index = () => {
         .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(29,78,216,.4),0 4px 12px rgba(29,78,216,.25);}
         .btn-outline{border:1.5px solid rgba(29,78,216,.25);transition:all .25s;}
         .btn-outline:hover{background:rgba(29,78,216,.05);border-color:rgba(29,78,216,.5);transform:translateY(-1px);}
+        .btn-g{display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;cursor:pointer;font-weight:700;font-family:inherit;background:rgba(255,255,255,0.13);color:white;border:1.5px solid rgba(255,255,255,0.28);transition:all .2s;}
+        .btn-g:hover{background:rgba(255,255,255,0.22);transform:translateY(-1px);}
         .section-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 12px;border-radius:100px;}
         .search-bar{background:white;border:1.5px solid rgba(59,130,246,.2);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.06),0 0 0 4px rgba(59,130,246,.04);transition:all .3s;}
         .search-bar:focus-within{border-color:rgba(59,130,246,.5);box-shadow:0 4px 32px rgba(0,0,0,.08),0 0 0 4px rgba(59,130,246,.08);}
@@ -373,7 +375,7 @@ const Index = () => {
               </h1>
 
               <p className="hero-sub text-lg text-slate-500 leading-relaxed mb-8 max-w-lg" style={{visibility:"hidden"}}>
-                Marketplace foto event terbesar. Temukan dirimu di ribuan foto wisuda, konser & konferensi — atau jual karyamu ke ribuan pembeli.
+                Marketplace foto event terbesar. Temukan dirimu di ribuan foto wisuda, konser & konferensi atau jual karyamu ke ribuan pembeli.
               </p>
 
               <div className="hero-search search-bar flex items-center gap-3 px-5 py-4 mb-6 max-w-lg" style={{visibility:"hidden"}}>
@@ -430,7 +432,7 @@ const Index = () => {
               Untuk Siapa Saja
             </h2>
             <p className="text-slate-500 max-w-lg mx-auto text-sm leading-relaxed">
-              Platform kami melayani dua kebutuhan utama — pencari foto dan fotografer profesional.
+              Platform kami melayani dua kebutuhan utama pencari foto dan fotografer profesional.
             </p>
           </div>
 
@@ -464,11 +466,11 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              <Link to="/register">
+              {/* <Link to="/register">
                 <button className="mt-6 w-full btn-primary text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
                   <Camera className="w-4 h-4" /> Temukan Fotomu — Gratis
                 </button>
-              </Link>
+              </Link> */}
             </div>
 
             {/* Path B — Photographer */}
@@ -500,11 +502,11 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              <Link to="/register">
+              {/* <Link to="/register">
                 <button className="mt-6 w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border-2 border-orange-200 text-orange-700 hover:bg-orange-50 transition-colors">
                   <Award className="w-4 h-4" /> Daftar sebagai Fotografer
                 </button>
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
@@ -569,14 +571,6 @@ const Index = () => {
               { name:"Andi Pratama",   specialty:"Corporate & Conference", photos:2100, sales:"6.1K", rating:4.9, idx:2 },
               { name:"Rina Marlina",   specialty:"Street & Documentary",   photos:560,  sales:"1.5K", rating:4.7, idx:3 },
             ].map((p,i) => <div key={i} className="pgr-card"><PhotographerCard {...p} /></div>)}
-          </div>
-
-          <div className="mt-10 text-center">
-            <Link to="/photographers">
-              <button className="btn-outline inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-blue-600 font-bold text-sm bg-white">
-                Lihat Semua Fotografer <ArrowRight className="w-4 h-4" />
-              </button>
-            </Link>
           </div>
         </div>
       </section>
@@ -675,17 +669,17 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              <Link to="/register">
+              {/* <Link to="/register">
                 <button className="btn-primary mt-8 inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-white font-bold text-sm">
                   <Scan className="w-4 h-4" /> Coba Face Search — Gratis
                 </button>
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══ PRICING ════════════════════════════════════════════ */}
+      {/* ═══ PRICING ════════════════════════════════════════════ 
       <section className="py-20 bg-white border-y border-slate-100">
         <div className="container max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
@@ -713,12 +707,12 @@ const Index = () => {
                     </li>
                   ))}
                 </ul>
-                <Link to={plan.link}><button className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${plan.btn}`}>{plan.btnText}</button></Link>
+                 <Link to={plan.link}><button className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${plan.btn}`}>{plan.btnText}</button></Link> 
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* ═══ API ════════════════════════════════════════════════ */}
       <section className="api-section py-20 bg-slate-900 text-white relative overflow-hidden">
@@ -755,8 +749,8 @@ const Index = () => {
                 ))}
               </div>
               <div className="api-el flex gap-3">
-                <Link to="/pricing"><button className="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm">Lihat Paket API <ArrowRight className="w-4 h-4" /></button></Link>
-                <Link to="/docs"><button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-semibold text-sm hover:bg-white/10 transition-colors"><Code2 className="w-4 h-4" /> Dokumentasi</button></Link>
+                {/* <Link to="/pricing"><button className="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm">Lihat Paket API <ArrowRight className="w-4 h-4" /></button></Link>
+                <Link to="/docs"><button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-semibold text-sm hover:bg-white/10 transition-colors"><Code2 className="w-4 h-4" /> Dokumentasi</button></Link> */}
               </div>
             </div>
 
@@ -818,32 +812,27 @@ const Index = () => {
 
       {/* ═══ CTA ════════════════════════════════════════════════ */}
       <section className="cta-section py-20 bg-white border-t border-slate-100">
-        <div className="container max-w-3xl mx-auto px-6 text-center">
-          <div className="relative overflow-hidden rounded-3xl p-12 md:p-16 shadow-2xl shadow-blue-200"
-            style={{ background:"linear-gradient(135deg,#1d4ed8 0%,#1e40af 60%,#1d4ed8 100%)" }}>
-            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage:"radial-gradient(circle,white 1px,transparent 1px)", backgroundSize:"32px 32px" }} />
-            <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-             <div className="absolute -bottom-16 -right-16 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="container max-w-2xl mx-auto px-6 text-center">
+          <div className="relative overflow-hidden rounded-3xl p-12 md:p-16 shadow-2xl shadow-blue-100"
+            style={{ background: "linear-gradient(135deg,#1d4ed8 0%,#1e40af 100%)" }}>
+            <div className="absolute inset-0 opacity-10 pointer-events-none"
+              style={{ backgroundImage: "radial-gradient(circle,white 1px,transparent 1px)", backgroundSize: "28px 28px" }} />
+            <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
+            <div className="absolute -bottom-16 -right-16 w-60 h-60 rounded-full bg-amber-300/10 blur-2xl" />
             <div className="relative">
-              {/* <div className="cta-el inline-flex items-center gap-2 text-xs font-semibold text-blue-100 bg-white/10 rounded-full px-4 py-1.5 mb-6">
-                🎉 Bergabung dengan 50.000+ pengguna
-              </div>*/}
-              <h2 className="cta-el playfair text-4xl md:text-5xl font-black text-white mb-4 leading-tight">
-                Siap Menemukan<br />Momenmu?
-              </h2>
+              <Globe className="cta-el w-12 h-12 text-amber-300 mx-auto mb-5" />
+              <h2 className="cta-el playfair text-4xl text-white mb-4">Bergabunglah Bersama Kami</h2>
               <p className="cta-el text-blue-100 text-sm mb-8 max-w-md mx-auto leading-relaxed">
-                Gratis untuk pencari foto. Daftar sekarang dan temukan semua foto eventmu — atau mulai jual karya fotografimu.
+                Mari bersama membuat pencarian foto acara lebih mudah dan menyenangkan untuk semua orang.
               </p>
-              <div className="cta-el flex flex-wrap gap-3 justify-center">
-                <Link to="/register">
-                  <button className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
-                    <Camera className="w-4 h-4" /> Coba Gratis Sekarang
+              <div className="cta-el flex gap-3 justify-center flex-wrap">
+                {/* <Link to="/register">
+                  <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
+                    <Camera className="w-4 h-4" /> Mulai Sekarang
                   </button>
-                </Link>
-                <Link to="/register">
-                  <button className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-white/10 border border-white/20 text-white font-bold text-sm hover:bg-white/20 transition-all hover:-translate-y-0.5">
-                    <Award className="w-4 h-4" /> Jadi Fotografer
-                  </button>
+                </Link> */}
+                <Link to="/contact">
+                  <button className="btn-g text-sm">Hubungi Kami <ArrowRight className="w-4 h-4" /></button>
                 </Link>
               </div>
             </div>

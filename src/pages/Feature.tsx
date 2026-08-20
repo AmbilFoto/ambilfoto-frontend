@@ -1,9 +1,3 @@
-/**
- * Features.tsx — AmbilFoto design system
- * Palette: blue + amber + orange | Font: Sora
- * Animations: CSS IntersectionObserver + MutationObserver
- *             fast easing (0.45s cubic-bezier), threshold 5%, unobserve after fire
- */
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
@@ -13,6 +7,7 @@ import {
   Clock, Smartphone, Users, Globe, Lock, BarChart3,
   ArrowRight, Check, Sparkles, Image, TrendingUp,
   CheckCircle2, Star, Heart,
+  MessageSquare,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────
@@ -23,7 +18,9 @@ const STYLES = `
   * { box-sizing: border-box; }
   .pg { font-family:'Sora',system-ui,sans-serif; }
   .fw8 { font-weight:800; letter-spacing:-0.03em; }
+  .heading { font-family:'Sora',system-ui,sans-serif; font-weight:800; letter-spacing:-0.03em; }
   .g-blue { background:linear-gradient(135deg,#1d4ed8,#2563eb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .gradient-text { background:linear-gradient(135deg,#1d4ed8,#2563eb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
 
   /* Buttons */
   .btn-b { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;border:none;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:white;box-shadow:0 6px 20px rgba(29,78,216,0.28);transition:transform .2s,box-shadow .2s; }
@@ -32,9 +29,22 @@ const STYLES = `
   .btn-o:hover { background:#eff6ff;border-color:rgba(29,78,216,0.45);transform:translateY(-1px); }
   .btn-g { display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;background:rgba(255,255,255,0.13);color:white;border:1.5px solid rgba(255,255,255,0.28);transition:all .2s; }
   .btn-g:hover { background:rgba(255,255,255,0.22);transform:translateY(-1px); }
+  .btn-primary {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    box-shadow: 0 8px 32px rgba(29,78,216,0.25), 0 2px 8px rgba(29,78,216,0.15);
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    color: white; font-weight: 700; border: none; cursor: pointer;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(29,78,216,0.4); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.25);
+    color: white; font-weight: 700; cursor: pointer; transition: all 0.25s;
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
 
   /* Pill */
   .pill { display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase; }
+  .section-pill { display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:5px 12px;border-radius:100px; }
 
   /* Cards */
   .af-card { background:white;border:1.5px solid #f1f5f9;border-radius:20px;padding:24px;transition:border-color .28s,box-shadow .28s,transform .28s; }
@@ -78,6 +88,12 @@ const STYLES = `
 
   /* Step line connector */
   .step-line { position:absolute;top:24px;left:calc(50% + 28px);width:calc(100% - 56px);height:1.5px;background:linear-gradient(90deg,#bfdbfe,#e0f2fe);z-index:0; }
+
+  /* CTA (disamakan dengan halaman Contact) */
+  @media (max-width: 639px) {
+    .cta-buttons { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+    .cta-buttons button { width: 100% !important; justify-content: center !important; }
+  }
 `;
 
 /* ─────────────────────────────────────────────────────────
@@ -438,7 +454,7 @@ const Features = () => {
               Manfaat yang <span className="g-blue">Nyata</span>
             </h2>
             <p className="text-slate-500 text-sm max-w-md mx-auto">
-              Bukan sekadar janji — ini yang benar-benar Anda rasakan saat menggunakan AmbilFoto.id
+              Bukan sekadar janji ini yang benar-benar Anda rasakan saat menggunakan AmbilFoto.id
             </p>
           </div>
 
@@ -460,27 +476,35 @@ const Features = () => {
         </div>
       </section>
 
-      {/* ══ CTA ═════════════════════════════════════════════ */}
-      <section className="py-20 bg-white border-t border-slate-100">
-        <div className="container max-w-2xl mx-auto px-6 text-center">
-          <div className="rv rv-s relative overflow-hidden rounded-3xl p-12 shadow-2xl shadow-blue-100"
-            style={{ background: "linear-gradient(135deg,#1d4ed8 0%,#1e40af 100%)" }}>
+      {/* ══ CTA ═══════════════════════════════════════════════ */}
+      <section className="cta-wrap py-10 md:py-20 bg-white">
+        <div className="container max-w-2xl mx-auto px-4 sm:px-6">
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl p-8 sm:p-12 shadow-2xl shadow-blue-100"
+            style={{ background:"linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)" }}>
             <div className="absolute inset-0 opacity-10 pointer-events-none"
-              style={{ backgroundImage: "radial-gradient(circle,white 1px,transparent 1px)", backgroundSize: "28px 28px" }} />
+              style={{ backgroundImage:"radial-gradient(circle, white 1px, transparent 1px)", backgroundSize:"32px 32px" }} />
             <div className="absolute -top-14 -left-14 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
             <div className="absolute -bottom-14 -right-14 w-56 h-56 rounded-full bg-amber-300/10 blur-2xl" />
-            <div className="relative">
-              <h2 className="fw8 text-4xl text-white mt-3 mb-3 leading-tight">Siap Menemukan Foto Anda?</h2>
-              <p className="text-blue-100 text-sm mb-8 max-w-md mx-auto leading-relaxed">
-                Bergabung dengan ribuan pengguna yang sudah merasakan kemudahan mencari foto dengan AI face recognition.
+            <div className="relative text-center">
+              <MessageSquare className="cta-el w-10 h-10 sm:w-12 sm:h-12 text-amber-300 mx-auto mb-3 sm:mb-4" />
+              <h2 className="cta-el heading text-3xl sm:text-4xl text-white mb-2 sm:mb-3">
+                Masih Bingung?<br />Gas Chat Aja!
+              </h2>
+              <p className="cta-el text-blue-100 text-sm mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed">
+                Tim support kami fast response dan super helpful. Jangan sungkan-sungkan ya! 🚀
               </p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                <button onClick={() => navigate("/register")}
-                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
-                  Mulai Gratis <ArrowRight className="w-4 h-4" />
+              <div className="cta-buttons cta-el flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => window.open("https://wa.me/6281234567890","_blank")}
+                  className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 active:bg-blue-100 shadow-lg transition-all hover:-translate-y-0.5"
+                >
+                  <MessageSquare className="w-4 h-4" /> Chat Sekarang
                 </button>
-                <button onClick={() => navigate("/pricing")} className="btn-g text-sm">
-                  Lihat Harga
+                <button
+                  onClick={() => window.location.href = "mailto:admin@ambilfoto.id"}
+                  className="btn-ghost inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl text-sm"
+                >
+                  Kirim Email <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
