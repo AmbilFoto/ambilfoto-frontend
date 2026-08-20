@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// TODO: ganti balik ke http://localhost:8080/api begitu API Gateway sudah
+// jalan dan route /api/auth/* sudah diproxy ke Auth Service (:8001).
+// Untuk sekarang, langsung ke Auth Service karena gateway belum di-setup.
 const AUTH_API_URL =
-  import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/api';
+  import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8001/api';
 
 // ✅ EXPORT authApi agar bisa dipakai di puzzle-captcha.service.ts
 export const authApi = axios.create({
@@ -39,39 +42,37 @@ authApi.interceptors.response.use(
 // =====================
 export interface RegisterData {
   email: string;
-  phone_number?: string;  // ✅ Fixed: backend expects phone_number
+  phone?: string; // ✅ matches backend registerRequest.Phone (json:"phone")
   password: string;
   full_name: string;
   role?: 'user' | 'photographer';
-  captcha_token?: string | null;  // ✅ Added: for CAPTCHA support
+  captcha_token?: string | null;
 }
 
 export interface RegisterFaceData {
-  face_image: string;
+  face_embedding: string; // ✅ matches backend body{ FaceEmbedding } (json:"face_embedding")
 }
 
 export interface LoginData {
   email: string;
   password: string;
-  captcha_token?: string | null;  // ✅ Added: for CAPTCHA support
+  captcha_token?: string | null;
 }
 
 export interface FaceLoginData {
-  face_image: string;
-  captcha_token?: string | null;  // ✅ Added: for CAPTCHA support
+  face_embedding: string; // ✅ consistent with face_embedding contract everywhere
+  captcha_token?: string | null;
 }
 
 export interface UserProfile {
   id: string;
   email: string;
-  phone_number?: string;  // ✅ Fixed: backend uses phone_number
+  phone?: string; // ✅ matches models.User.Phone (json:"phone,omitempty")
   full_name: string;
   role: 'user' | 'photographer' | 'admin';
-  profile_photo?: string;
   is_verified: boolean;
   created_at: string;
   last_login?: string;
-  photographer_id?: string;
 }
 
 export interface AuthResponse {
@@ -83,9 +84,9 @@ export interface AuthResponse {
     similarity?: number;
   };
   error?: string;
-  code?: string;  // ✅ Added: for error codes like CAPTCHA_REQUIRED
-  remainingAttempts?: number;  // ✅ Added: for login attempt tracking
-  failedAttempts?: number;  // ✅ Added: for login attempt tracking
+  code?: string;
+  remainingAttempts?: number;
+  failedAttempts?: number;
 }
 
 // =====================
@@ -103,9 +104,9 @@ export const authService = {
   /**
    * Register face after signup
    */
-  async registerFace(faceImage: string): Promise<AuthResponse> {
+  async registerFace(faceEmbedding: string): Promise<AuthResponse> {
     const response = await authApi.put('/auth/register/face', {
-      face_image: faceImage,
+      face_embedding: faceEmbedding,
     });
     return response.data;
   },
@@ -120,6 +121,8 @@ export const authService = {
 
   /**
    * Login using face biometric
+   * NOTE: backend endpoint saat ini masih 501 Not Implemented
+   * (nunggu integrasi AI Service) — panggil ini akan gagal sampai itu selesai.
    */
   async loginWithFace(data: FaceLoginData): Promise<AuthResponse> {
     const response = await authApi.post('/auth/login/face', data);
@@ -141,9 +144,8 @@ export const authService = {
 
   async updateProfile(data: {
     full_name?: string;
-    phone_number?: string;  // ✅ Fixed: backend expects phone_number
-    profile_photo?: string;
-  }): Promise<{ success: boolean; data?: UserProfile; error?: string }> {
+    phone?: string; // ✅ matches backend UpdateProfile body{ FullName, Phone }
+  }): Promise<{ success: boolean; message?: string; error?: string }> {
     const response = await authApi.put('/auth/profile', data);
     return response.data;
   },
@@ -160,19 +162,56 @@ export const authService = {
   },
 
   /**
-   * Update face after login (security)
+   * ✅ BARU — sebelumnya ForgotPassword.tsx manggil authApi.post() langsung
+   * dari komponen (nggak konsisten sama pola method lain di authService).
+   * Cocok dengan backend RequestPasswordReset: selalu balikin
+   * { success: true } apapun hasilnya (anti email-enumeration), jadi
+   * jangan expect field lain selain success/message di sini.
+   */
+  async requestPasswordReset(
+    email: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const response = await authApi.post('/auth/password/reset/request', { email });
+    return response.data;
+  },
+
+  /**
+   * ✅ BARU — pasangan dari requestPasswordReset di atas, buat step
+   * konfirmasi (masukin OTP + password baru). Cocok dengan backend
+   * ConfirmPasswordReset: butuh email, otp, dan new_password.
+   */
+  async confirmPasswordReset(
+    email: string,
+    otp: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await authApi.post('/auth/password/reset/confirm', {
+      email,
+      otp,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+
+  /**
+   * Update face after login (security-sensitive, requires password confirmation)
+   * ✅ Backend endpoint PUT /auth/profile/face sekarang sudah ada.
    */
   async updateFaceBiometric(
-    faceImage: string,
+    faceEmbedding: string,
     password: string
   ): Promise<{ success: boolean; message?: string; error?: string }> {
     const response = await authApi.put('/auth/profile/face', {
-      face_image: faceImage,
+      face_embedding: faceEmbedding,
       password,
     });
     return response.data;
   },
 
+  /**
+   * ✅ Backend sekarang benar-benar validasi password + confirmation.
+   * confirmation harus persis string "DELETE".
+   */
   async deleteAccount(
     password: string,
     confirmation: string

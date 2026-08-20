@@ -270,18 +270,18 @@ const About = () => {
 
           {/* Sub */}
           <p className="h-in h-d2 from-y text-lg text-slate-500 max-w-xl mx-auto leading-relaxed mb-8">
-            AmbilFoto.id adalah platform AI photo marketplace yang membantu kamu menemukan dan membeli foto dari acara apapun — mudah, cepat, dan aman.
+            AmbilFoto.id adalah platform AI photo marketplace yang membantu kamu menemukan dan membeli foto dari acara apapun mudah, cepat, dan aman.
           </p>
 
-          {/* CTA */}
+          {/* CTA 
           <div className="h-in h-d3 from-y flex gap-3 justify-center flex-wrap">
             <Link to="/register"><button className="btn-b"><Camera className="w-4 h-4" />Mulai Sekarang</button></Link>
             <Link to="/contact"><button className="btn-o">Hubungi Kami <ArrowRight className="w-4 h-4" /></button></Link>
-          </div>
+          </div>*/}
         </div>
       </section>
 
-      {/* ══ STATS ═══════════════════════════════════════════ */}
+      {/* ══ STATS ═══════════════════════════════════════════ 
       <section className="py-12 bg-white border-b border-slate-100">
         <div className="container max-w-4xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -296,7 +296,7 @@ const About = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* ══ STORY ═══════════════════════════════════════════ */}
       <section className="py-20 bg-white">
@@ -322,19 +322,9 @@ const About = () => {
                 <div className="relative rounded-3xl overflow-hidden shadow-xl shadow-slate-200/60 border-4 border-white flt">
                   <img src="https://images.pexels.com/photos/1190297/pexels-photo-1190297.jpeg"
                     alt="Team" className="w-full max-w-sm aspect-square object-cover" />
-                  <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-2xl px-4 py-3 shadow-lg border border-slate-100 flex items-center gap-3">
-                    <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">Didirikan 2023</p>
-                      <p className="text-xs text-slate-500">Jakarta, Indonesia 🇮🇩</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
@@ -364,7 +354,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* ══ TIMELINE ════════════════════════════════════════ */}
+      {/* ══ TIMELINE ════════════════════════════════════════ 
       <section className="py-20 bg-white">
         <div className="container max-w-3xl mx-auto px-6">
 
@@ -391,9 +381,9 @@ const About = () => {
           </div>
 
         </div>
-      </section>
+      </section>*/}
 
-      {/* ══ ACHIEVEMENTS ════════════════════════════════════ */}
+      {/* ══ ACHIEVEMENTS ════════════════════════════════════ 
       <section className="py-20 bg-slate-50/60 border-y border-slate-100">
         <div className="container max-w-5xl mx-auto px-6">
           <div className="grid lg:grid-cols-2 gap-14 items-center">
@@ -428,7 +418,7 @@ const About = () => {
 
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* ══ TECHNOLOGY ══════════════════════════════════════ */}
       <section className="py-20 bg-white">
@@ -471,11 +461,11 @@ const About = () => {
                 Mari bersama membuat pencarian foto acara lebih mudah dan menyenangkan untuk semua orang.
               </p>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Link to="/register">
+                {/*<Link to="/register">
                   <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
                     <Camera className="w-4 h-4" /> Mulai Sekarang
                   </button>
-                </Link>
+                </Link>*/}
                 <Link to="/contact">
                   <button className="btn-g text-sm">Hubungi Kami <ArrowRight className="w-4 h-4" /></button>
                 </Link>

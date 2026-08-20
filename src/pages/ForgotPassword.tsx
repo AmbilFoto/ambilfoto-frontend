@@ -7,9 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { authService } from "@/services/api/auth.service";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -37,11 +35,11 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/auth/password/reset/request`, {
-        email: email.trim()
-      });
+      // ✅ FIX: sebelumnya manggil authApi.post() langsung dari komponen.
+      // Sekarang lewat authService, konsisten sama semua flow auth lain.
+      const response = await authService.requestPasswordReset(email.trim());
 
-      if (response.data.success) {
+      if (response.success) {
         setSent(true);
         toast({
           title: "✅ Email Terkirim",

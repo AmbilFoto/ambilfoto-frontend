@@ -36,11 +36,10 @@ export const Header = () => {
 
   const publicNavLinks = [
     { to: "/features", label: "Fitur" },
-    { to: "/pricing",  label: "Harga AI" },
+   //{ to: "/pricing",  label: "Harga AI" },
     { to: "/about",    label: "Tentang" },
     { to: "/contact",  label: "Kontak" },
   ];
-
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-24 items-center justify-between py-2">
@@ -56,40 +55,41 @@ export const Header = () => {
           />
         </Link>
 
-        {/* Desktop nav */}
-        {isAuthenticated ? (
-          isAdmin ? (
-            <nav className="hidden md:flex items-center gap-6">
-              <Link to="/admin/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
-              <Link to="/admin/users"     className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Pengguna</Link>
-              <Link to="/admin/events"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Acara</Link>
-              <Link to="/admin/revenue"   className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Pendapatan</Link>
-            </nav>
-          ) : isPhotographer ? (
-            <nav className="hidden md:flex items-center gap-6">
-              <Link to="/photographer/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
-              <Link to="/photographer/events"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Acara</Link>
-              <Link to="/photographer/wallet"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dompet</Link>
-            </nav>
+        {/* Right side: nav menu + auth/account, semua di pojok kanan */}
+        <div className="flex items-center gap-6">
+          {/* Desktop nav */}
+          {isAuthenticated ? (
+            isAdmin ? (
+              <nav className="hidden md:flex items-center gap-6">
+                <Link to="/admin/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
+                <Link to="/admin/users"     className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Pengguna</Link>
+                <Link to="/admin/events"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Acara</Link>
+                <Link to="/admin/revenue"   className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Pendapatan</Link>
+              </nav>
+            ) : isPhotographer ? (
+              <nav className="hidden md:flex items-center gap-6">
+                <Link to="/photographer/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
+                <Link to="/photographer/events"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Acara</Link>
+                <Link to="/photographer/wallet"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dompet</Link>
+              </nav>
+            ) : (
+              <nav className="hidden md:flex items-center gap-6">
+                <Link to="/user/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
+                <Link to="/user/photos"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Foto Saya</Link>
+                <Link to="/user/wallet"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dompet</Link>
+              </nav>
+            )
           ) : (
             <nav className="hidden md:flex items-center gap-6">
-              <Link to="/user/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
-              <Link to="/user/photos"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Foto Saya</Link>
-              <Link to="/user/wallet"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dompet</Link>
+              {publicNavLinks.map(l => (
+                <Link key={l.to} to={l.to} className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">
+                  {l.label}
+                </Link>
+              ))}
             </nav>
-          )
-        ) : (
-          <nav className="hidden md:flex items-center gap-6">
-            {publicNavLinks.map(l => (
-              <Link key={l.to} to={l.to} className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-        )}
+          )}
 
-        {/* Right side */}
-        <div className="flex items-center gap-3">
+          {/* Auth / account area */}
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -145,9 +145,9 @@ export const Header = () => {
             </DropdownMenu>
           ) : (
             <>
-              {/* Desktop auth buttons */}
+              {/* Desktop auth buttons
               <Link to="/login"    className="hidden md:inline-flex"><Button variant="ghost">Masuk</Button></Link>
-              <Link to="/register" className="hidden md:inline-flex"><Button>Mulai</Button></Link>
+              <Link to="/register" className="hidden md:inline-flex"><Button>Daftar</Button></Link> */}
 
               {/* Mobile hamburger — hanya muncul kalau belum login */}
               <button
@@ -176,12 +176,12 @@ export const Header = () => {
             </Link>
           ))}
           <div className="flex gap-3 pt-4">
-            <Link to="/login"    className="flex-1" onClick={() => setMobileOpen(false)}>
+               {/*<Link to="/login"    className="flex-1" onClick={() => setMobileOpen(false)}>
               <Button variant="outline" className="w-full">Masuk</Button>
             </Link>
             <Link to="/register" className="flex-1" onClick={() => setMobileOpen(false)}>
-              <Button className="w-full">Mulai</Button>
-            </Link>
+              <Button className="w-full">Daftar</Button>
+            </Link>*/}
           </div>
         </div>
       )}

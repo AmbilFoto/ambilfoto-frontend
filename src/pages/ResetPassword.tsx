@@ -1,57 +1,59 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, CheckCircle, AlertCircle, Lock, Loader2, Mail, KeyRound } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, AlertCircle, Lock, Loader2, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import { authService } from "@/services/api/auth.service";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const maskEmail = (email: string) => {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return email;
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${'*'.repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+};
 
 const ResetPassword = () => {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [step, setStep] = useState<'verify' | 'otp' | 'success'>('verify');
+  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<'otp' | 'success'>('otp');
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(true);
-  
+  const [resending, setResending] = useState(false);
+
   // Form states
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  // User info
-  const [userId, setUserId] = useState("");
-  const [maskedEmail, setMaskedEmail] = useState("");
-  
-  // Timer for OTP expiry
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
-  
-  // OTP input refs
+
+  // Timer for OTP expiry — backend generates OTP dengan masa berlaku 15
+  // menit (lihat RequestPasswordReset: DATE_ADD(NOW(), INTERVAL 15 MINUTE)),
+  const [timeLeft, setTimeLeft] = useState(15 * 60);
+
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Verify token on mount
+  // Ambil email dari sessionStorage yang diisi ForgotPassword.tsx. Kalau
+  // nggak ada (misal user langsung buka /reset-password tanpa lewat form),
+  // nggak ada cara buat tau OTP ini punya siapa — lempar balik.
   useEffect(() => {
-    if (!token) {
+    const storedEmail = sessionStorage.getItem('reset_email');
+    if (!storedEmail) {
       toast({
-        title: "❌ Link Tidak Valid",
-        description: "Link reset password tidak valid atau sudah kadaluarsa.",
+        title: "❌ Sesi Tidak Ditemukan",
+        description: "Silakan mulai lagi dari halaman lupa password.",
         variant: "destructive",
       });
       navigate('/forgot-password');
       return;
     }
-
-    verifyToken();
-  }, [token]);
+    setEmail(storedEmail);
+  }, []);
 
   // Timer countdown
   useEffect(() => {
@@ -63,47 +65,13 @@ const ResetPassword = () => {
     }
   }, [step, timeLeft]);
 
-  const verifyToken = async () => {
-    try {
-      const response = await axios.post(`${API_URL}/auth/password/reset/verify`, {
-        token
-      });
-
-      if (response.data.success) {
-        setUserId(response.data.data.user_id);
-        setMaskedEmail(response.data.data.email_masked);
-        setStep('otp');
-        toast({
-          title: "✅ Token Valid",
-          description: "Kode OTP telah dikirim ke email Anda.",
-        });
-      }
-    } catch (error: any) {
-      console.error('Token verification error:', error);
-      toast({
-        title: "❌ Link Tidak Valid",
-        description: error.response?.data?.error || "Link sudah kadaluarsa atau tidak valid.",
-        variant: "destructive",
-      });
-      
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        navigate('/forgot-password');
-      }, 2000);
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   const handleOtpChange = (index: number, value: string) => {
-    // Only allow numbers
     if (value && !/^\d$/.test(value)) return;
 
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
 
-    // Auto-focus next input
     if (value && index < 5) {
       otpRefs.current[index + 1]?.focus();
     }
@@ -118,7 +86,7 @@ const ResetPassword = () => {
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData('text').trim();
-    
+
     if (/^\d{6}$/.test(pastedData)) {
       const newOtp = pastedData.split('');
       setOtp(newOtp);
@@ -131,7 +99,6 @@ const ResetPassword = () => {
 
     if (loading) return;
 
-    // Validate OTP
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
       toast({
@@ -142,7 +109,6 @@ const ResetPassword = () => {
       return;
     }
 
-    // Validate password
     if (password !== confirmPassword) {
       toast({
         title: "❌ Password Tidak Cocok",
@@ -161,7 +127,6 @@ const ResetPassword = () => {
       return;
     }
 
-    // Check password strength
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumber = /\d/.test(password);
@@ -178,24 +143,23 @@ const ResetPassword = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/auth/password/reset/confirm`, {
-        token,
-        otp: otpCode,
-        new_password: password
-      });
+      const response = await authService.confirmPasswordReset(email, otpCode, password);
 
-      if (response.data.success) {
+      if (response.success) {
         setStep('success');
+        sessionStorage.removeItem('reset_email');
         toast({
           title: "✅ Berhasil!",
           description: "Password Anda berhasil direset.",
         });
+      } else {
+        throw new Error(response.error || 'Reset password gagal');
       }
     } catch (error: any) {
       console.error('Reset password error:', error);
       toast({
         title: "❌ Reset Gagal",
-        description: error.response?.data?.error || "Terjadi kesalahan. Silakan coba lagi.",
+        description: error.response?.data?.error || error.message || "Terjadi kesalahan. Silakan coba lagi.",
         variant: "destructive",
       });
     } finally {
@@ -204,10 +168,11 @@ const ResetPassword = () => {
   };
 
   const handleResendOTP = async () => {
-    setLoading(true);
+    setResending(true);
     try {
-      await axios.post(`${API_URL}/auth/password/reset/verify`, { token });
-      setTimeLeft(300); // Reset timer
+      await authService.requestPasswordReset(email);
+      setTimeLeft(15 * 60);
+      setOtp(["", "", "", "", "", ""]);
       toast({
         title: "✅ OTP Terkirim",
         description: "Kode OTP baru telah dikirim ke email Anda.",
@@ -219,7 +184,7 @@ const ResetPassword = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   };
 
@@ -228,21 +193,6 @@ const ResetPassword = () => {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  if (verifying) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/5 to-background">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex items-center justify-center py-12">
-            <div className="text-center space-y-4">
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-              <p className="text-muted-foreground">Memverifikasi link...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   if (step === 'success') {
     return (
@@ -265,8 +215,8 @@ const ResetPassword = () => {
               </AlertDescription>
             </Alert>
 
-            <Button 
-              onClick={() => navigate('/login')} 
+            <Button
+              onClick={() => navigate('/login')}
               className="w-full"
               size="lg"
             >
@@ -292,7 +242,7 @@ const ResetPassword = () => {
             </div>
             <CardTitle className="text-center text-2xl">Reset Password</CardTitle>
             <CardDescription className="text-center">
-              Masukkan kode OTP yang dikirim ke <strong>{maskedEmail}</strong>
+              Masukkan kode OTP yang dikirim ke <strong>{email ? maskEmail(email) : '...'}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -330,12 +280,19 @@ const ResetPassword = () => {
                       type="button"
                       onClick={handleResendOTP}
                       className="text-primary hover:underline font-medium"
-                      disabled={loading}
+                      disabled={resending}
                     >
-                      Kirim Ulang
+                      {resending ? 'Mengirim...' : 'Kirim Ulang'}
                     </button>
                   ) : (
-                    <span className="text-red-600 font-semibold">OTP Kadaluarsa</span>
+                    <button
+                      type="button"
+                      onClick={handleResendOTP}
+                      className="text-red-600 font-semibold hover:underline"
+                      disabled={resending}
+                    >
+                      {resending ? 'Mengirim...' : 'OTP Kadaluarsa — Kirim Ulang'}
+                    </button>
                   )}
                 </div>
               </div>
@@ -427,10 +384,10 @@ const ResetPassword = () => {
                 </AlertDescription>
               </Alert>
 
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={loading || timeLeft === 0}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading}
                 size="lg"
               >
                 {loading ? (
@@ -445,14 +402,14 @@ const ResetPassword = () => {
             </form>
 
             <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="block text-primary hover:underline"
               >
                 ← Kembali ke halaman reset password
               </Link>
-              <Link 
-                to="/login" 
+              <Link
+                to="/login"
                 className="block text-muted-foreground hover:text-foreground"
               >
                 Sudah punya akun? Login

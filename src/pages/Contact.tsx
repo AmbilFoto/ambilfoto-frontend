@@ -203,7 +203,7 @@ const ContactUs = () => {
     }
     setSubmitting(true);
     setTimeout(() => {
-      const mailto = `mailto:hello@ambilfoto.id?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(`Nama: ${formData.name}\nEmail: ${formData.email}\n\nPesan:\n${formData.message}`)}`;
+      const mailto = `mailto:admin@ambilfoto.id?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(`Nama: ${formData.name}\nEmail: ${formData.email}\n\nPesan:\n${formData.message}`)}`;
       window.location.href = mailto;
       setSubmitted(true); setSubmitting(false);
       setFormData({ name:"", email:"", subject:"", message:"" });
@@ -212,16 +212,16 @@ const ContactUs = () => {
   };
 
   const contactInfos = [
-    { icon:Mail,   title:"Email Kami",    desc:"hello@ambilfoto.id",    sub:"Balas dalam 24 jam",    action:"mailto:hello@ambilfoto.id",  accent:"blue",   iconBg:"bg-blue-50 text-blue-600"   },
+    { icon:Mail,   title:"Email Kami",    desc:"admin@ambilfoto.id",    sub:"Balas dalam 24 jam",    action:"mailto:admin@ambilfoto.id",  accent:"blue",   iconBg:"bg-blue-50 text-blue-600"   },
     { icon:Phone,  title:"WhatsApp",      desc:"+62 812-3456-7890",      sub:"Chat langsung tim kami", action:"https://wa.me/6281234567890", accent:"amber",  iconBg:"bg-amber-50 text-amber-600" },
-    { icon:MapPin, title:"Lokasi Kantor", desc:"Jakarta Selatan",        sub:"Indonesia 🇮🇩",           action:"https://maps.google.com",     accent:"emerald",iconBg:"bg-emerald-50 text-emerald-600"},
+   // { icon:MapPin, title:"Lokasi Kantor", desc:"Jakarta Selatan",        sub:"Indonesia 🇮🇩",           action:"https://maps.google.com",     accent:"emerald",iconBg:"bg-emerald-50 text-emerald-600"},
   ];
 
   const socials = [
-    { icon:Instagram, name:"Instagram", handle:"@ambilfoto.id",  bg:"bg-orange-50 text-orange-500",  link:"https://instagram.com/ambilfoto.id" },
-    { icon:Twitter,   name:"Twitter",   handle:"@ambilfoto",      bg:"bg-blue-50 text-blue-500",      link:"https://twitter.com/ambilfoto"      },
-    { icon:Facebook,  name:"Facebook",  handle:"AmbilFoto.id",    bg:"bg-blue-50 text-blue-700",      link:"https://facebook.com/ambilfoto.id"  },
-    { icon:Linkedin,  name:"LinkedIn",  handle:"AmbilFoto",       bg:"bg-blue-50 text-blue-600",      link:"https://linkedin.com/company/ambilfoto"},
+    { icon:Instagram, name:"Instagram", handle:"@ambilfoto.id",  bg:"bg-orange-50 text-orange-500",  link:"https://instagram.com/ambilfoto.official" },
+    { icon:Twitter,   name:"Twitter",   handle:"@ambilfoto",      bg:"bg-blue-50 text-blue-500",      link:"https://twitter.com/ambilfoto.official"      },
+    { icon:Facebook,  name:"Facebook",  handle:"AmbilFoto.id",    bg:"bg-blue-50 text-blue-700",      link:"https://facebook.com/ambilfoto.official" }, 
+    { icon:Linkedin,  name:"LinkedIn",  handle:"AmbilFoto",       bg:"bg-blue-50 text-blue-600",      link:"https://linkedin.com/company/ambilfoto.official"},
   ];
 
   const hours = [
@@ -232,7 +232,7 @@ const ContactUs = () => {
 
   const faqs = [
     { q:"Berapa lama respon email?", a:"Kami berusaha membalas dalam 24 jam kerja." },
-    { q:"Bisa video call?",           a:"Tentu! Hubungi kami untuk jadwal meeting."   },
+    { q:"Bisa voice call?",           a:"Tentu! Hubungi kami untuk jadwal meeting."   },
     { q:"Support 24/7?",              a:"Chat support tersedia di jam kerja, email 24/7." },
   ];
 
@@ -257,7 +257,7 @@ const ContactUs = () => {
             <span className="h-line block gradient-text">Yuk, Ngobrol!</span>
           </h1>
           <p className="h-sub text-base sm:text-lg text-slate-500 max-w-lg mx-auto leading-relaxed px-2">
-            Tim kami siap bantu kamu. Drop message atau langsung chat aja — kami friendly dan fast response! 😊
+            Tim kami siap bantu kamu. Drop message atau langsung chat aja kami friendly dan fast response! 😊
           </p>
         </div>
       </section>
@@ -266,7 +266,7 @@ const ContactUs = () => {
       <section className="py-8 md:py-12 bg-white border-b border-slate-100">
         <div className="cinfo-row container max-w-4xl mx-auto px-4 sm:px-6">
           {/* Mobile: horizontal scrollable row; tablet+: 3-col grid */}
-          <div className="contact-info-grid grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
+          <div className="contact-info-grid grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5">
             {contactInfos.map((c,i) => {
               const Icon = c.icon;
               return (
@@ -410,7 +410,7 @@ const ContactUs = () => {
         </div>
       </section>
 
-      {/* ══ MAP ═══════════════════════════════════════════════ */}
+      {/* ══ MAP ═══════════════════════════════════════════════ 
       <section className="map-section py-10 md:py-20 bg-slate-50/60 border-y border-slate-100">
         <div className="container max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-6 sm:mb-10">
@@ -419,7 +419,6 @@ const ContactUs = () => {
             <p className="text-slate-500 text-sm">Mampir langsung? Kabarin dulu biar kita siapin kopi! ☕</p>
           </div>
           <div className="map-wrap bg-white rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-100 shadow-xl shadow-slate-100">
-            {/* Taller aspect on mobile for better usability */}
             <div className="relative" style={{ paddingBottom: "min(56.25%, 280px)" }}>
               <iframe
                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d126920.23949154248!2d106.68942984335937!3d-6.229386799999999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e69f3e945e34b9d%3A0x5371bf0fdad786a2!2sJakarta%2C%20Indonesia!5e0!3m2!1sen!2sid"
@@ -446,7 +445,7 @@ const ContactUs = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* ══ CTA ═══════════════════════════════════════════════ */}
       <section className="cta-wrap py-10 md:py-20 bg-white">
@@ -473,7 +472,7 @@ const ContactUs = () => {
                   <MessageSquare className="w-4 h-4" /> Chat Sekarang
                 </button>
                 <button
-                  onClick={() => window.location.href = "mailto:hello@ambilfoto.id"}
+                  onClick={() => window.location.href = "mailto:admin@ambilfoto.id"}
                   className="btn-ghost inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl text-sm"
                 >
                   Kirim Email <ArrowRight className="w-4 h-4" />
