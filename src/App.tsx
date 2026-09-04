@@ -89,8 +89,16 @@ import PhotographerUpgradeStatus from "./pages/user/PhotographerUpgradeStatus";
 import AdminPhotographerRequests from "./pages/admin/AdminPhotographerRequest";
 import PaymentResult from "./pages/developer/Result";
 import AdminChatRoom from "./pages/admin/ChatRoom";
+import { BayanOpenAuthProvider } from '@/contexts/BayanOpenAuthContext';
+import { BayanOpenProtectedRoute } from '@/components/clientarea/BayanOpenProtectedRoute';
+import { BayanOpenLayout } from '@/components/clientarea/BayanOpenLayout';
+import BayanOpenLogin from '@/pages/clientarea/bayan-open/Login';
+import BayanOpenOverview from '@/pages/clientarea/bayan-open/Overview';
+import BayanOpenStatistics from '@/pages/clientarea/bayan-open/Statistics';
+import BayanOpenGalleryPage from '@/pages/clientarea/bayan-open/GalleryPage';
 
-const queryClient = new QueryClient();
+
+const queryClient = new QueryClient();   // 👈 tambahkan ini
 
 // Protected route for photographers only
 const PhotographerRoute = ({ children }: { children: React.ReactNode }) => {
@@ -162,6 +170,32 @@ const App = () => (
             
             {/* PUBLIC EVENT VIEW - Must be BEFORE other routes to avoid conflicts */}
             <Route path="/event/:eventSlug" element={<PhotographerEventPublicView />} />
+
+            {/* ========================================
+                BAYAN OPEN ROUTES 
+            ======================================== */}
+            <Route
+              path="/clientarea/bayan-open/login"
+              element={
+                <BayanOpenAuthProvider>
+                  <BayanOpenLogin />
+                </BayanOpenAuthProvider>
+              }
+            />
+            <Route
+              path="/clientarea/bayan-open"
+              element={
+                <BayanOpenAuthProvider>
+                  <BayanOpenProtectedRoute>
+                    <BayanOpenLayout />
+                  </BayanOpenProtectedRoute>
+                </BayanOpenAuthProvider>
+              }
+            >
+              <Route index element={<BayanOpenOverview />} />
+              <Route path="statistics" element={<BayanOpenStatistics />} />
+              <Route path="gallery" element={<BayanOpenGalleryPage />} />
+            </Route>
             
             {/* ========================================
                 USER ROUTES 
