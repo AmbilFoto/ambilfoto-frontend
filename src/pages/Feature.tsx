@@ -495,7 +495,7 @@ const Features = () => {
               </p>
               <div className="cta-buttons cta-el flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={() => window.open("https://wa.me/6281234567890","_blank")}
+                  onClick={() => window.open("https://wa.me/628219822233","_blank")}
                   className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 active:bg-blue-100 shadow-lg transition-all hover:-translate-y-0.5"
                 >
                   <MessageSquare className="w-4 h-4" /> Chat Sekarang

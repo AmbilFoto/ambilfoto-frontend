@@ -36,7 +36,7 @@ export const Header = () => {
 
   const publicNavLinks = [
     { to: "/features", label: "Fitur" },
-   //{ to: "/pricing",  label: "Harga AI" },
+   { to: "/pricing",  label: "Harga AI" },
     { to: "/about",    label: "Tentang" },
     { to: "/contact",  label: "Kontak" },
   ];

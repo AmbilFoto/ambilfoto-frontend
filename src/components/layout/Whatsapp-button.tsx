@@ -17,7 +17,7 @@ export default function WhatsAppWidget() {
   // Don't render if on hidden routes
   if (shouldHide) return null;
   
-  const phoneNumber = "6281234567890"; // Ganti dengan nomor WhatsApp Anda
+  const phoneNumber = "628219822233"; // Ganti dengan nomor WhatsApp Anda
   const companyName = "AmbilFoto.id";
   const companyTagline = "AI-Powered Photo Recognition";
 
@@ -37,16 +37,6 @@ export default function WhatsAppWidget() {
     }
   };
 
-  const quickMessages = [
-    "Bagaimana cara kerja AI Face Recognition?",
-    "Berapa biaya untuk download foto?",
-    "Apakah data wajah saya aman?",
-    "Bagaimana cara upload foto wajah saya?",
-    "Apakah bisa mencari foto orang lain?",
-    "Berapa lama proses pencarian foto?",
-    "Format foto apa yang didukung?",
-    "Bagaimana jika foto saya tidak ditemukan?",
-  ];
 
   return (
     <>
@@ -94,20 +84,6 @@ export default function WhatsAppWidget() {
                 </p>
               </div>
               <span className="text-xs text-gray-500 ml-2" style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Baru saja</span>
-            </div>
-
-            {/* Quick Reply Buttons */}
-            <div className="space-y-2 mb-4">
-              {quickMessages.map((msg, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setMessage(msg)}
-                  className="w-full bg-white hover:bg-gray-50 text-left p-3 rounded-lg shadow-sm text-sm text-gray-700 transition-colors border border-gray-200"
-                  style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
-                >
-                  {msg}
-                </button>
-              ))}
             </div>
           </div>
 
