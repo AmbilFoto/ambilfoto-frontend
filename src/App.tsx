@@ -97,6 +97,7 @@ import BayanOpenOverview from '@/pages/clientarea/bayan-open/Overview';
 import BayanOpenStatistics from '@/pages/clientarea/bayan-open/Statistics';
 import BayanOpenGalleryPage from '@/pages/clientarea/bayan-open/GalleryPage';
 import EventPublicBayanOpenCraft from "./pages/EventCraftOpen";
+import WhatsAppWidget from "./components/layout/Whatsapp-button";
 
 const queryClient = new QueryClient();   // 👈 tambahkan ini
 
@@ -146,6 +147,7 @@ const UserOnlyRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -686,6 +688,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <WhatsAppWidget />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
