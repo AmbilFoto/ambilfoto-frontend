@@ -483,33 +483,54 @@ const EventPublicBayanOpenCraft = () => {
 
       <Header />
 
-      {/* ═══ HERO ═══════════════════════════════════════════════ */}
-      <section className="relative overflow-hidden mesh-bg pt-16 pb-14 md:pt-20 md:pb-16">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-blue-100/40 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-amber-100/30 blur-3xl pointer-events-none" />
-
-        <div className="container max-w-4xl mx-auto px-6 relative text-center">
-          <div className="section-pill bg-blue-50 text-blue-700 border border-blue-200/80 mb-5 mx-auto w-fit">
-            <span className="live-dot w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-            Galeri Foto Berbasis Face AI
-          </div>
-          <h1 className="playfair text-4xl md:text-5xl font-black leading-tight text-slate-900 mb-3">
-            Galeri Foto <span className="gradient-text">{EVENT_NAME}</span>
-          </h1>
-          <p className="text-slate-500 text-sm">
-            {EVENT_LOCATION} &nbsp;·&nbsp; {EVENT_DATE_LABEL}
-          </p>
+    {/* ═══ HERO ═══════════════════════════════════════════════ */}
+    <section className="relative overflow-hidden pt-16 pb-14 md:pt-20 md:pb-16">
+    {/* Background photo collage */}
+    <div className="absolute inset-0 grid grid-cols-2 md:grid-cols-4">
+       {[
+        "https://ik.imagekit.io/zaekg3ju7/Bayan-1739_e0mi1r.jpg?updatedAt=1787801440413",
+        "https://ik.imagekit.io/zaekg3ju7/AR__2907.JPG?updatedAt=1787807725544",
+        "https://ik.imagekit.io/zaekg3ju7/AR__3022.JPG?updatedAt=1789117499043",
+        "https://ik.imagekit.io/zaekg3ju7/ALK_2912.JPG?updatedAt=1789117677832",
+        ].map((src, i) => (
+        <div key={i} className="relative h-full overflow-hidden bg-slate-800">
+            <img
+            src={src}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => {
+                (e.currentTarget.parentElement as HTMLElement).style.background = "linear-gradient(135deg,#1e293b,#0f172a)";
+                e.currentTarget.style.display = "none";
+            }}
+            />
         </div>
-      </section>
+        ))}
+    </div>
+    {/* Black overlay for readability */}
+    <div className="absolute inset-0 bg-black/35" />
+
+    <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
+    <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
+
+    <div className="container max-w-4xl mx-auto px-6 relative text-center">
+        <div className="section-pill bg-white/10 text-blue-300 border border-white/20 mb-5 mx-auto w-fit backdrop-blur">
+        <span className="live-dot w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+        Galeri Foto Berbasis Face AI
+        </div>
+        <h1 className="playfair text-4xl md:text-5xl font-black leading-tight text-white mb-3">
+        Galeri Foto {EVENT_NAME}
+        </h1>
+        <p className="text-slate-300 text-sm">
+        {EVENT_LOCATION} &nbsp;·&nbsp; {EVENT_DATE_LABEL}
+        </p>
+    </div>
+    </section>
 
       {/* ═══ FACE REGISTRATION ══════════════════════════════════ */}
       {!gallerySearched && (
         <section className="py-6 bg-white">
           <div className="container max-w-2xl mx-auto px-6">
             <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-8 md:p-10 text-center">
-              <div className="section-pill bg-blue-50 text-blue-700 border border-blue-100 mb-4 mx-auto w-fit">
-                <ScanFace className="w-3.5 h-3.5" /> Temukan Foto Anda
-              </div>
               <h2 className="playfair text-2xl md:text-3xl font-black text-slate-900 mb-2">
                 Cari Fotomu dengan Wajah
               </h2>
@@ -615,8 +636,7 @@ const EventPublicBayanOpenCraft = () => {
                       disabled={capturing}
                       className="btn-primary inline-flex items-center gap-2 text-white text-xs font-bold px-6 py-3 rounded-xl"
                     >
-                      {capturing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      Ambil Manual
+                      Scan Manual
                     </button>
                     <button
                       onClick={stopCamera}
@@ -641,11 +661,6 @@ const EventPublicBayanOpenCraft = () => {
                   {statusMsg.text}
                 </div>
               )}
-
-              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-6">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                Face embeddings dienkripsi. Foto wajah Anda tidak disimpan.
-              </div>
             </div>
           </div>
         </section>
@@ -845,11 +860,3 @@ const EventPublicBayanOpenCraft = () => {
 };
 
 export default EventPublicBayanOpenCraft;
-
-/* ════════════════════════════════════════════════════════════
-   PENDAFTARAN ROUTE (tambahkan di App.tsx):
-
-   import EventPublicBayanOpenCraft from "./pages/EventPublicBayanOpenCraft";
-   ...
-   <Route path="/event-public/bayan-open-craft" element={<EventPublicBayanOpenCraft />} />
-════════════════════════════════════════════════════════════ */
