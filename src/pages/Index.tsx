@@ -41,59 +41,53 @@ function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
   return <span ref={ref}>{val.toLocaleString()}{suffix}</span>;
 }
 
-/* ────────────────────────── PHOTO CARD (no image) ──────────── */
-const CARD_GRADS = [
-  "from-blue-400 to-indigo-600",
-  "from-violet-400 to-purple-600",
-  "from-rose-400 to-pink-600",
-  "from-amber-400 to-orange-500",
-];
-const CARD_ICONS = [GraduationCap, Music, Mic2, Building2];
-
-function PhotoCard({ price, event, photographer, liked, gradIdx }: {
-  price: string; event: string; photographer: string; liked?: boolean; gradIdx: number;
+/* ────────────────────────── EVENT CARD ──────────────────────── */
+function EventCard({
+  logos, title, subtitle, href, disabled,
+}: {
+  logos: string[]; title: string; subtitle: string; href?: string; disabled?: boolean;
 }) {
-  const [isLiked, setIsLiked] = useState(liked || false);
-  const [hov, setHov] = useState(false);
-  const Icon = CARD_ICONS[gradIdx % CARD_ICONS.length];
-  return (
+  const content = (
     <div
-      className="group relative rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer border border-slate-100"
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      className={`group relative rounded-3xl overflow-hidden border transition-all duration-300 ${
+        disabled
+          ? "border-slate-100 bg-slate-50 cursor-not-allowed"
+          : "border-slate-100 bg-white hover:border-blue-200 hover:shadow-xl cursor-pointer"
+      }`}
     >
-      <div className={`relative bg-gradient-to-br ${CARD_GRADS[gradIdx % CARD_GRADS.length]} flex items-center justify-center`} style={{ aspectRatio: "4/3" }}>
-        <Icon className="w-12 h-12 text-white/30" />
-        <div className="absolute top-3 left-3 flex gap-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
-          <div className="w-1.5 h-1.5 rounded-full bg-white/25" />
-        </div>
-        <div className="absolute bottom-3 left-3 text-xs font-bold text-white/80 bg-black/20 rounded-full px-2 py-0.5">HD</div>
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-3 transition-opacity duration-300" style={{ opacity: hov ? 1 : 0 }}>
-          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center border border-white/30">
-            <Eye className="w-4 h-4 text-white" />
+      <div
+        className="relative flex items-center justify-center gap-4 bg-gradient-to-br from-slate-50 to-slate-100 p-10"
+        style={{ aspectRatio: "16/10" }}
+      >
+        {logos.map((logo, i) => (
+          <img
+            key={i}
+            src={logo}
+            alt={title}
+            className={`max-h-20 w-auto object-contain transition-transform duration-300 ${
+              disabled ? "grayscale opacity-50" : "group-hover:scale-105"
+            }`}
+          />
+        ))}
+        {disabled && (
+          <div className="absolute top-3 right-3 bg-slate-900/80 text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full">
+            Segera Hadir
           </div>
-          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shadow-lg">
-            <ShoppingBag className="w-4 h-4 text-white" />
-          </div>
-        </div>
-        <button
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow hover:scale-110 transition-transform"
-          onClick={(e) => { e.stopPropagation(); setIsLiked(v => !v); }}
-        >
-          <Heart className={`w-4 h-4 ${isLiked ? "fill-orange-500 text-orange-500" : "text-slate-400"}`} />
-        </button>
+        )}
       </div>
-      <div className="p-3">
-        <p className="text-slate-800 font-semibold text-sm mb-0.5 truncate">{event}</p>
-        <p className="text-slate-400 text-xs mb-2">oleh {photographer}</p>
-        <div className="flex items-center justify-between">
-          <span className="text-blue-600 font-bold text-sm">{price}</span>
-          <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">RAW+JPG</span>
+      <div className="p-5">
+        <p className="font-bold text-slate-800 text-sm mb-0.5">{title}</p>
+        <p className="text-slate-400 text-xs mb-4">{subtitle}</p>
+        <div className={`inline-flex items-center gap-1.5 text-xs font-bold ${disabled ? "text-slate-300" : "text-blue-600"}`}>
+          {disabled ? "Galeri belum tersedia" : "Lihat Galeri Foto"}
+          {!disabled && <ArrowRight className="w-3.5 h-3.5" />}
         </div>
       </div>
     </div>
   );
+
+  if (disabled || !href) return content;
+  return <Link to={href}>{content}</Link>;
 }
 
 /* ────────────────────────── PHOTOGRAPHER CARD ──────────────── */
@@ -276,22 +270,37 @@ function PricingSection() {
   const [error, setError] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
 
-  useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(PRICING_API_URL);
-        if (!res.ok) throw new Error("Gagal memuat data harga");
-        const json = await res.json();
-        if (!json.success) throw new Error("Response API tidak valid");
-        setPlans(json.data);
-      } catch (err: any) {
-        setError(err.message ?? "Terjadi kesalahan");
-      } finally {
-        setLoading(false);
+  const fetchPlans = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const res = await fetch(PRICING_API_URL, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) throw new Error(`Server merespons dengan status ${res.status}`);
+      const json = await res.json();
+      if (!json.success) throw new Error("Response API tidak valid");
+      setPlans(json.data);
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        setError("Permintaan ke server harga melebihi batas waktu. Coba lagi.");
+      } else if (err instanceof TypeError) {
+        setError("Tidak bisa terhubung ke server harga saat ini. Silakan coba lagi nanti.");
+      } else {
+        setError(err.message ?? "Terjadi kesalahan saat memuat harga.");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getPrice = (plan: Plan) => {
@@ -353,9 +362,15 @@ function PricingSection() {
         )}
 
         {error && (
-          <div className="flex flex-col items-center gap-2 py-16 text-red-500 text-sm">
-            <AlertCircle className="w-6 h-6" />
-            {error}
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <AlertCircle className="w-6 h-6 text-red-400" />
+            <p className="text-red-500 text-sm max-w-sm">{error}</p>
+            <button
+              onClick={fetchPlans}
+              className="btn-outline text-blue-600 text-xs font-bold px-5 py-2.5 rounded-xl bg-white"
+            >
+              Coba Lagi
+            </button>
           </div>
         )}
 
@@ -511,7 +526,7 @@ const Index = () => {
 
         scrollReveal(".stat-card",        ".stats-row",             { y:30, scale:0.94 });
         scrollReveal(".step-item",        ".how-section",           { y:50 });
-        scrollReveal(".photo-card-anim",  ".marketplace-section",   { y:40 });
+        scrollReveal(".event-card-anim",  ".events-section",        { y:40 });
         scrollReveal(".pgr-card",         ".photographers-section", { y:50, scale:0.95 });
         scrollReveal(".ai-item",          ".ai-section",            { x:-40 });
         scrollReveal(".api-el",           ".api-section",           { y:40 });
@@ -704,48 +719,45 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ═══ MARKETPLACE ════════════════════════════════════════ */}
-      <section className="marketplace-section py-20 bg-slate-50/70">
+      {/* ═══ EVENT PUBLIK ═══════════════════════════════════════ */}
+      <section className="events-section py-20 bg-slate-50/70">
         <div className="container max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
             <div>
-              <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-3">🔥 Trending Sekarang</div>
+              <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-3">🔥 Event Publik</div>
               <h2 className="playfair text-4xl md:text-5xl font-black text-slate-900 leading-tight">
-                Foto Event<br /><span className="gradient-text-warm">Terpopuler</span>
+                Galeri Foto<br /><span className="gradient-text-warm">Event Saat Ini</span>
               </h2>
             </div>
-            <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 text-sm shadow-sm overflow-x-auto scrollbar-none max-w-full shrink-0">
-              {["Semua","Wisuda","Konser","Konferensi"].map((t,i) => (
-                <button 
-                  key={t} 
-                  className={`px-4 py-2 rounded-lg transition-all font-medium whitespace-nowrap ${i===0?"tab-active":"text-slate-500 hover:text-slate-700"}`}
-                >
-                  {t}
-                </button>
-              ))}
+            <p className="text-slate-500 text-sm max-w-sm">
+              Temukan dirimu di foto-foto event yang sedang berlangsung dengan AI Face Recognition.
+            </p>
           </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[
-              { price:"Rp 25.000", event:"Wisuda UI 2025",  photographer:"Budi S.",  liked:true,  gradIdx:0 },
-              { price:"Rp 35.000", event:"Java Jazz 2025",  photographer:"Sari W.",  liked:false, gradIdx:1 },
-              { price:"Rp 20.000", event:"Wisuda ITB 2025", photographer:"Andi P.",  liked:true,  gradIdx:2 },
-              { price:"Rp 30.000", event:"TEDxJakarta",     photographer:"Rina M.",  liked:false, gradIdx:3 },
-            ].map((p,i) => <div key={i} className="photo-card-anim"><PhotoCard {...p} /></div>)}
-          </div>
-
-          <div className="mt-10 text-center">
-            <Link to="/marketplace">
-              <button className="btn-outline inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-blue-600 font-bold text-sm bg-white">
-                Lihat Semua Foto <ArrowRight className="w-4 h-4" />
-              </button>
-            </Link>
+         <div className="grid sm:grid-cols-2 gap-6">
+            <div className="event-card-anim">
+              <EventCard
+                logos={[
+                  "https://res.cloudinary.com/viecqvpk/image/upload/q_auto/f_auto/v1786581021/bayanopen-logo_mfcb55_rk41oh.webp",
+                  "https://res.cloudinary.com/viecqvpk/image/upload/v1789114756/LOGO_EVENT_Bayan_2026_jolyfx.png",
+                ]}
+                title="Bayan Open & Craft Art Festival 2026"
+                subtitle="Turnamen Olahraga & Festival Seni · Balikpapan"
+                href="/event-public/bayan-open-craft"
+              />
+            </div>
+            <div className="event-card-anim">
+              <EventCard
+                logos={["https://ik.imagekit.io/nwtwwkdgu/LOGO_BR2026_vbixvo.webp?updatedAt=1787729796492"]}
+                title="Bayan Run 2026"
+                subtitle="Fun Run · Segera Hadir"
+                disabled
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ═══ PHOTOGRAPHERS ══════════════════════════════════════ */}
+      {/* ═══ PHOTOGRAPHERS ══════════════════════════════════════ 
       <section className="photographers-section py-20 bg-white">
         <div className="container max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
@@ -763,7 +775,7 @@ const Index = () => {
             ].map((p,i) => <div key={i} className="pgr-card"><PhotographerCard {...p} /></div>)}
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* ═══ AI SECTION ═════════════════════════════════════════ */}
       <section className="ai-section py-20 bg-slate-50/70 overflow-hidden">

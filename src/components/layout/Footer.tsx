@@ -10,9 +10,9 @@ export const Footer = () => {
           <div className="space-y-4 md:max-w-xs">
             <Link to="/" className="inline-flex items-center gap-2 transition-all duration-200 hover:opacity-80">
               <img
-                src="https://res.cloudinary.com/dzkvjy4ds/image/upload/v1787187498/ambilfoto-logo-crop.png"
+                src="https://res.cloudinary.com/dwyi4d3rq/image/upload/v1765171746/ambilfoto-logo_hvn8s2.png"
                 alt="AmbilFoto.id Logo"
-                className="h-24 w-auto"
+                className="h-28 w-auto"
               />
             </Link>
             <p className="text-sm text-muted-foreground">
