@@ -213,7 +213,7 @@ const ContactUs = () => {
 
   const contactInfos = [
     { icon:Mail,   title:"Email Kami",    desc:"admin@ambilfoto.id",    sub:"Balas dalam 24 jam",    action:"mailto:admin@ambilfoto.id",  accent:"blue",   iconBg:"bg-blue-50 text-blue-600"   },
-    { icon:Phone,  title:"WhatsApp",      desc:"+62 812-3456-7890",      sub:"Chat langsung tim kami", action:"https://wa.me/6281234567890", accent:"amber",  iconBg:"bg-amber-50 text-amber-600" },
+    { icon:Phone,  title:"WhatsApp",      desc:"+628219822233",      sub:"Chat langsung tim kami", action:"https://wa.me/628219822233", accent:"amber",  iconBg:"bg-amber-50 text-amber-600" },
    // { icon:MapPin, title:"Lokasi Kantor", desc:"Jakarta Selatan",        sub:"Indonesia 🇮🇩",           action:"https://maps.google.com",     accent:"emerald",iconBg:"bg-emerald-50 text-emerald-600"},
   ];
 
@@ -466,7 +466,7 @@ const ContactUs = () => {
               </p>
               <div className="cta-buttons cta-el flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={() => window.open("https://wa.me/6281234567890","_blank")}
+                  onClick={() => window.open("https://wa.me/628219822233","_blank")}
                   className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 active:bg-blue-100 shadow-lg transition-all hover:-translate-y-0.5"
                 >
                   <MessageSquare className="w-4 h-4" /> Chat Sekarang
