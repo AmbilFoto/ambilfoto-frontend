@@ -11,10 +11,13 @@ import {
   Check, Star, Users, Image as ImageIcon, Globe,
   Search, Heart, ShoppingBag, TrendingUp, Award,
   Layers, Eye, MapPin, Aperture, Mountain, Music,
-  Mic2, GraduationCap, Building2, Cpu, Lock
+  Mic2, GraduationCap, Building2, Cpu, Lock,
+  Loader2, AlertCircle
 } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
+
+const PRICING_API_URL = "https://darkorange-salmon-395345.hostingersite.com/api/developer/plans";
 
 /* ────────────────────────── COUNTER ─────────────────────────── */
 function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
@@ -227,6 +230,199 @@ function HeroVisual() {
   );
 }
 
+/* ────────────────────────── PRICING SECTION (API-driven) ────── */
+interface PlanPricingTier {
+  price: number;
+  price_formatted: string | null;
+  total_charge: number;
+  total_formatted: string | null;
+  savings: number;
+  savings_pct: number;
+  badge_label?: string;
+  duration_days: number;
+}
+
+interface Plan {
+  id: string;
+  slug: string;
+  name: string;
+  color_tag: string;
+  target_segment: string;
+  positioning: string;
+  is_custom: boolean;
+  features: string[];
+  limits: {
+    api_hit_limit: number;
+    rate_limit_rpm: number;
+    sla_hours: number;
+    sla_label: string;
+    support_channel: string;
+    support_level: string;
+  };
+  pricing: {
+    monthly: PlanPricingTier | null;
+    yearly: PlanPricingTier | null;
+  };
+  price: number;
+  upload_label: string;
+  price_formatted: string;
+}
+
+type BillingCycle = "monthly" | "yearly";
+
+function PricingSection() {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(PRICING_API_URL);
+        if (!res.ok) throw new Error("Gagal memuat data harga");
+        const json = await res.json();
+        if (!json.success) throw new Error("Response API tidak valid");
+        setPlans(json.data);
+      } catch (err: any) {
+        setError(err.message ?? "Terjadi kesalahan");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPlans();
+  }, []);
+
+  const getPrice = (plan: Plan) => {
+    if (plan.is_custom) return "Hubungi Kami";
+    const cycle = plan.pricing?.[billingCycle];
+    return cycle?.price_formatted ?? plan.price_formatted;
+  };
+
+  const getSub = (plan: Plan) => {
+    if (plan.is_custom) return "By Request";
+    const cycle = plan.pricing?.[billingCycle];
+    if (billingCycle === "yearly" && cycle?.badge_label) {
+      return `per bulan · ${cycle.badge_label}`;
+    }
+    return `per bulan · ${plan.upload_label}`;
+  };
+
+  const popularSlug = "developer";
+  const hasYearly = plans.some((p) => p.pricing?.yearly);
+
+  return (
+    <section className="py-20 bg-white border-y border-slate-100">
+      <div className="container max-w-6xl mx-auto px-6">
+        <div className="text-center mb-10">
+          <div className="section-pill bg-emerald-50 text-emerald-700 border border-emerald-100 mb-4">💰 Harga Transparan</div>
+          <h2 className="playfair text-4xl md:text-5xl font-black text-slate-900 mb-3">
+            Harga yang Adil<br /><span className="gradient-text">untuk Semua Pihak</span>
+          </h2>
+        </div>
+
+        {!loading && !error && hasYearly && (
+          <div className="flex items-center justify-center gap-3 mb-10">
+            <span className={`text-sm font-bold ${billingCycle === "monthly" ? "text-slate-900" : "text-slate-400"}`}>
+              Bulanan
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={billingCycle === "yearly"}
+              onClick={() => setBillingCycle(billingCycle === "monthly" ? "yearly" : "monthly")}
+              className="pricing-toggle-track"
+              style={{ backgroundColor: billingCycle === "yearly" ? "#1d4ed8" : "#cbd5e1" }}
+            >
+              <span
+                className="pricing-toggle-thumb"
+                style={{ transform: billingCycle === "yearly" ? "translateX(24px)" : "translateX(0)" }}
+              />
+            </button>
+            <span className={`text-sm font-bold ${billingCycle === "yearly" ? "text-slate-900" : "text-slate-400"}`}>
+              Tahunan
+            </span>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          </div>
+        )}
+
+        {error && (
+          <div className="flex flex-col items-center gap-2 py-16 text-red-500 text-sm">
+            <AlertCircle className="w-6 h-6" />
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {plans.map((plan) => {
+              const isPopular = plan.slug === popularSlug;
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative bg-white rounded-3xl border-2 p-8 shadow-sm hover:shadow-md transition-shadow flex flex-col ${
+                    isPopular ? "ring-2" : ""
+                  }`}
+                  style={{
+                    borderColor: isPopular ? plan.color_tag : "#e2e8f0",
+                    boxShadow: isPopular ? `0 4px 24px ${plan.color_tag}22` : undefined,
+                  }}
+                >
+                  {isPopular && (
+                    <div
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap"
+                      style={{ backgroundColor: plan.color_tag }}
+                    >
+                      Paling Populer
+                    </div>
+                  )}
+
+                  <div
+                    className="section-pill mb-4 text-xs w-fit"
+                    style={{ backgroundColor: `${plan.color_tag}1A`, color: plan.color_tag }}
+                  >
+                    {plan.name}
+                  </div>
+
+                  <p className="text-3xl font-black text-slate-900 mb-0.5">{getPrice(plan)}</p>
+                  <p className="text-sm text-slate-400 mb-1">{getSub(plan)}</p>
+                  <p className="text-xs text-slate-400 mb-6">{plan.target_segment}</p>
+
+                  <ul className="flex-1 space-y-3 mb-8">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-center gap-2.5 text-sm text-slate-600">
+                        <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5 text-emerald-600" />
+                        </div>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link to={plan.is_custom ? "/contact" : `/pricing?plan=${plan.slug}`}>
+                    <button
+                      className="w-full py-3 rounded-xl font-bold text-sm transition-all text-white"
+                      style={{ backgroundColor: plan.color_tag }}
+                    >
+                      {plan.is_custom ? "Hubungi Sales" : "Pilih Paket"}
+                    </button>
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /* ════════════════════════════ MAIN ═════════════════════════════ */
 const Index = () => {
   const { isAuthenticated, user } = useAuth();
@@ -350,6 +546,32 @@ const Index = () => {
         @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
         .live-dot{animation:pulse-dot 1.8s ease-in-out infinite;}
         @keyframes scanline{0%,100%{transform:translateX(0)}50%{transform:translateX(220%)}}
+        .pricing-toggle-track{
+          box-sizing:border-box;
+          display:inline-flex;
+          align-items:center;
+          width:52px;
+          height:28px;
+          padding:3px;
+          border:none;
+          border-radius:999px;
+          cursor:pointer;
+          appearance:none;
+          -webkit-appearance:none;
+          outline:none;
+          flex-shrink:0;
+          transition:background-color .3s cubic-bezier(.4,0,.2,1);
+        }
+        .pricing-toggle-thumb{
+          display:block;
+          width:22px;
+          height:22px;
+          border-radius:50%;
+          background:#fff;
+          box-shadow:0 1px 4px rgba(0,0,0,.18);
+          flex-shrink:0;
+          transition:transform .3s cubic-bezier(.4,0,.2,1);
+        }
       `}</style>
 
       <Header />
@@ -403,26 +625,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ═══ STATS ══════════════════════════════════════════════
-      <section className="py-12 bg-white border-y border-slate-100">
-        <div className="stats-row container max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-          {[
-            { val:500, suf:"K+", label:"Foto tersedia",    icon:ImageIcon, color:"text-blue-600",   bg:"bg-blue-50" },
-            { val:10,  suf:"K+", label:"Fotografer aktif", icon:Camera,    color:"text-amber-600",  bg:"bg-amber-50" },
-            { val:95,  suf:"%",  label:"Akurasi AI",       icon:Zap,       color:"text-amber-600",  bg:"bg-amber-50" },
-            { val:50,  suf:"K+", label:"Pengguna puas",    icon:Heart,     color:"text-orange-600", bg:"bg-orange-50" },
-          ].map((s,i) => (
-            <div key={i} className="stat-card flex flex-col items-center py-5 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all">
-              <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center mb-3`}>
-                <s.icon className={`w-5 h-5 ${s.color}`} />
-              </div>
-              <p className={`text-3xl font-extrabold ${s.color}`}><Counter to={s.val} suffix={s.suf} /></p>
-              <p className="text-xs text-slate-500 mt-0.5 text-center">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section> */}
-
       {/* ═══ HOW IT WORKS ═══════════════════════════════════════ */}
      <section className="how-section py-20 bg-white">
         <div className="container max-w-6xl mx-auto px-6">
@@ -466,11 +668,6 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              {/* <Link to="/register">
-                <button className="mt-6 w-full btn-primary text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                  <Camera className="w-4 h-4" /> Temukan Fotomu — Gratis
-                </button>
-              </Link> */}
             </div>
 
             {/* Path B — Photographer */}
@@ -502,11 +699,6 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              {/* <Link to="/register">
-                <button className="mt-6 w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border-2 border-orange-200 text-orange-700 hover:bg-orange-50 transition-colors">
-                  <Award className="w-4 h-4" /> Daftar sebagai Fotografer
-                </button>
-              </Link> */}
             </div>
           </div>
         </div>
@@ -515,7 +707,6 @@ const Index = () => {
       {/* ═══ MARKETPLACE ════════════════════════════════════════ */}
       <section className="marketplace-section py-20 bg-slate-50/70">
         <div className="container max-w-6xl mx-auto px-6">
-          {/* Ganti flex row jadi flex col di mobile */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
             <div>
               <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-3">🔥 Trending Sekarang</div>
@@ -523,7 +714,6 @@ const Index = () => {
                 Foto Event<br /><span className="gradient-text-warm">Terpopuler</span>
               </h2>
             </div>
-            {/* Ganti bagian tab filter */}
             <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 text-sm shadow-sm overflow-x-auto scrollbar-none max-w-full shrink-0">
               {["Semua","Wisuda","Konser","Konferensi"].map((t,i) => (
                 <button 
@@ -669,50 +859,13 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              {/* <Link to="/register">
-                <button className="btn-primary mt-8 inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-white font-bold text-sm">
-                  <Scan className="w-4 h-4" /> Coba Face Search — Gratis
-                </button>
-              </Link> */}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══ PRICING ════════════════════════════════════════════ 
-      <section className="py-20 bg-white border-y border-slate-100">
-        <div className="container max-w-5xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <div className="section-pill bg-emerald-50 text-emerald-700 border border-emerald-100 mb-4">💰 Harga Transparan</div>
-            <h2 className="playfair text-4xl md:text-5xl font-black text-slate-900 mb-3">
-              Harga yang Adil<br /><span className="gradient-text">untuk Semua Pihak</span>
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { title:"Pencari Foto", price:"Gratis", sub:"untuk pencarian & browse", border:"border-blue-200", badge:"bg-blue-50 text-blue-700", btn:"btn-primary text-white", btnText:"Mulai Gratis", link:"/register", perks:["Face recognition AI","Browse 500K+ foto","Notifikasi foto baru","Bayar per foto (Rp 15K–50K)","Download kualitas HD"] },
-              { title:"Fotografer", price:"Rp 0", sub:"daftar & upload gratis", border:"border-orange-300", badge:"bg-orange-500 text-white", btn:"bg-orange-500 hover:bg-orange-600 text-white", btnText:"Daftar Fotografer", link:"/register", highlight:true, perks:["Upload unlimited foto","Auto-tagging AI gratis","Komisi 70% per penjualan","Dashboard analitik","Cashout fleksibel"] },
-              { title:"Developer API", price:"Dari Rp 249K", sub:"per bulan", border:"border-slate-200", badge:"bg-slate-100 text-slate-700", btn:"border-2 border-slate-200 text-slate-700 hover:bg-slate-50", btnText:"Lihat Paket API", link:"/pricing", perks:["REST API akses penuh","Dev & Prod API keys","Usage analytics","SLA 99.9% uptime","SDK & dokumentasi"] },
-            ].map((plan,i) => (
-              <div key={i} className={`relative bg-white rounded-3xl border-2 ${plan.border} p-8 shadow-sm ${plan.highlight?"shadow-orange-100 ring-2 ring-orange-200":""} hover:shadow-md transition-shadow flex flex-col`}>
-                {plan.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap">Paling Populer</div>}
-                <div className={`section-pill ${plan.badge} mb-4 text-xs w-fit`}>{plan.title}</div>
-                <p className="text-3xl font-black text-slate-900 mb-0.5">{plan.price}</p>
-                <p className="text-sm text-slate-400 mb-6">{plan.sub}</p>
-                <ul className="flex-1 space-y-3 mb-8">
-                  {plan.perks.map(p => (
-                    <li key={p} className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0"><Check className="w-2.5 h-2.5 text-emerald-600" /></div>
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-                 <Link to={plan.link}><button className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${plan.btn}`}>{plan.btnText}</button></Link> 
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>*/}
+      {/* ═══ PRICING (API-driven) ═══════════════════════════════ */}
+      <PricingSection />
 
       {/* ═══ API ════════════════════════════════════════════════ */}
       <section className="api-section py-20 bg-slate-900 text-white relative overflow-hidden">
@@ -748,10 +901,6 @@ const Index = () => {
                   </div>
                 ))}
               </div>
-              <div className="api-el flex gap-3">
-                {/* <Link to="/pricing"><button className="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm">Lihat Paket API <ArrowRight className="w-4 h-4" /></button></Link>
-                <Link to="/docs"><button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-semibold text-sm hover:bg-white/10 transition-colors"><Code2 className="w-4 h-4" /> Dokumentasi</button></Link> */}
-              </div>
             </div>
 
             <div className="api-el">
@@ -781,35 +930,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ═══ TESTIMONIALS ═══════════════════════════════════════ 
-      <section className="py-20 bg-white">
-        <div className="container max-w-5xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-4">⭐ Testimoni</div>
-            <h2 className="playfair text-4xl font-black text-slate-900">Yang Mereka Katakan</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { name:"Putri Maharani",   role:"Mahasiswi UI 2025",     quote:"Gak nyangka bisa nemu semua foto wisuda gue dalam 2 detik! AI-nya keren banget.", stars:5, init:"PM", g:"from-blue-400 to-indigo-500" },
-              { name:"Reza Firmansyah",  role:"Fotografer Profesional", quote:"Revenue naik 3x lipat sejak pakai AmbilFoto. Foto gue otomatis dijual ke orang yang ada di foto!", stars:5, init:"RF", g:"from-violet-400 to-purple-500" },
-              { name:"Ahmad Fauzi",      role:"Backend Engineer",       quote:"API-nya clean banget. Integrasi ke app kita cuma butuh 2 jam. Dokumentasinya lengkap, 10/10!", stars:5, init:"AF", g:"from-emerald-400 to-teal-500" },
-            ].map((t,i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-slate-200 hover:shadow-md transition-shadow">
-                <div className="flex gap-0.5 mb-4">{Array.from({length:t.stars}).map((_,j)=><Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400"/>)}</div>
-                <p className="text-slate-600 text-sm leading-relaxed mb-5 italic">"{t.quote}"</p>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${t.g} flex items-center justify-center text-white text-xs font-black shrink-0`}>{t.init}</div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">{t.name}</p>
-                    <p className="text-xs text-slate-400">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>*/}
-
       {/* ═══ CTA ════════════════════════════════════════════════ */}
       <section className="cta-section py-20 bg-white border-t border-slate-100">
         <div className="container max-w-2xl mx-auto px-6 text-center">
@@ -826,11 +946,11 @@ const Index = () => {
                 Mari bersama membuat pencarian foto acara lebih mudah dan menyenangkan untuk semua orang.
               </p>
               <div className="cta-el flex gap-3 justify-center flex-wrap">
-                {/* <Link to="/register">
+                <Link to="/register">
                   <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
                     <Camera className="w-4 h-4" /> Mulai Sekarang
                   </button>
-                </Link> */}
+                </Link>
                 <Link to="/contact">
                   <button className="btn-g text-sm">Hubungi Kami <ArrowRight className="w-4 h-4" /></button>
                 </Link>
