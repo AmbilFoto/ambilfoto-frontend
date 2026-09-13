@@ -12,7 +12,7 @@ const EVENT_NAME = "Bayan Open 2026";
 const EVENT_LOCATION = "Balikpapan, Kalimantan Timur";
 const EVENT_DATE_LABEL = "24–29 Agustus 2026";
 const EVENT_START_DATE = "2026-08-24";
-const EVENT_TOTAL_DAYS = 5;
+const EVENT_TOTAL_DAYS = 8;
 
 const API_BASE_URL = "https://gallery.bayanopen.com";
 const REGISTER_ENDPOINT = `${API_BASE_URL}/api/user/register_face`;
