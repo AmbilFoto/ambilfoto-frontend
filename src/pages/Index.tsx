@@ -958,11 +958,10 @@ const Index = () => {
                 Mari bersama membuat pencarian foto acara lebih mudah dan menyenangkan untuk semua orang.
               </p>
               <div className="cta-el flex gap-3 justify-center flex-wrap">
-                <Link to="/register">
+              {/*  <Link to="/register">
                   <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 shadow-lg transition-all hover:-translate-y-0.5">
                     <Camera className="w-4 h-4" /> Mulai Sekarang
-                  </button>
-                </Link>
+                  </button>*/}
                 <Link to="/contact">
                   <button className="btn-g text-sm">Hubungi Kami <ArrowRight className="w-4 h-4" /></button>
                 </Link>
