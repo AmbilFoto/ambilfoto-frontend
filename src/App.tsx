@@ -97,6 +97,7 @@ import BayanOpenOverview from '@/pages/clientarea/bayan-open/Overview';
 import BayanOpenStatistics from '@/pages/clientarea/bayan-open/Statistics';
 import BayanOpenGalleryPage from '@/pages/clientarea/bayan-open/GalleryPage';
 import EventPublicBayanOpenCraft from "./pages/EventCraftOpen";
+import EventPublicBayanRun2026 from "./pages/EventBayanRun";
 import WhatsAppWidget from "./components/layout/Whatsapp-button";
 
 const queryClient = new QueryClient();   // 👈 tambahkan ini
@@ -170,6 +171,7 @@ const App = () => (
             <Route path="/register/face" element={<RegisterFace />} />
             <Route path="/login/face" element={<FaceLogin />} />
             <Route path="/event-public/bayan-open-craft" element={<EventPublicBayanOpenCraft />} />
+            <Route path="/event-public/bayan-run-2026" element={<EventPublicBayanRun2026 />} />
             
             {/* PUBLIC EVENT VIEW - Must be BEFORE other routes to avoid conflicts */}
             <Route path="/event/:eventSlug" element={<PhotographerEventPublicView />} />
