@@ -1,10 +1,9 @@
-import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import {
   Camera, Download, Check, X, ChevronLeft, ChevronRight,
-  Search, ScanFace, ShieldCheck, Sparkles, ImageOff, Loader2,
+  Search, ImageOff, Loader2,
 } from "lucide-react";
 
 const EVENT_SLUG = "bayan-open-craft";
@@ -15,23 +14,26 @@ const EVENT_START_DATE = "2026-08-24";
 const EVENT_TOTAL_DAYS = 8;
 
 const API_BASE_URL = "https://gallery.bayanopen.com";
-const REGISTER_ENDPOINT = `${API_BASE_URL}/api/user/register_face`;
-const PHOTOS_ENDPOINT = `${API_BASE_URL}/api/user/my_photos`;
+const BIOMETRIC_BASE = `${API_BASE_URL}/api/user/biometric`;
+const PHOTOS_BY_USER_ENDPOINT = `${API_BASE_URL}/api/user/my_photos_by_id`;
 const IMAGE_ENDPOINT = (filename: string) => `${API_BASE_URL}/api/preview/${filename}`;
 const DOWNLOAD_ENDPOINT = (filename: string) => `${API_BASE_URL}/api/download/${filename}`;
-const STORAGE_KEY = `ambilfoto_face_embedding_${EVENT_SLUG}`;
-const FACE_MODEL_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
-const FACE_API_SRC = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
-const STABLE_FRAMES_NEEDED = 6;
-const DETECT_INTERVAL_MS = 250;
+const STORAGE_KEY = `ambilfoto_user_id_${EVENT_SLUG}`;
+const MIN_ANGLES = 4;
+const BIO_CAPTURE_INTERVAL_MS = 600;
+const NEAR_MATCH_THRESHOLD = 0.85;
+const CHALLENGE_TRANSITION_MS = 450; // must match the setTimeout delay used when switching challenges
 
-declare global {
-  interface Window {
-    faceapi: any;
-  }
-}
+type Direction = "CENTER" | "LEFT" | "RIGHT" | "UP" | "DOWN";
+type ArrowDir = "up" | "down" | "left" | "right" | null;
 
-type ScanState = "idle" | "red" | "yellow" | "green";
+const DIRECTION_META: Record<Direction, { arrow: ArrowDir; label: string }> = {
+  CENTER: { arrow: null, label: "Lihat lurus ke kamera" },
+  LEFT: { arrow: "left", label: "Tolehkan kepala ke KIRI" },
+  RIGHT: { arrow: "right", label: "Tolehkan kepala ke KANAN" },
+  UP: { arrow: "up", label: "Angkat dagu / lihat ke ATAS" },
+  DOWN: { arrow: "down", label: "Tundukkan kepala ke BAWAH" },
+};
 
 interface PhotoMeta {
   date?: string;
@@ -48,6 +50,25 @@ interface Photo {
   url?: string;
   preview_url?: string;
   metadata?: PhotoMeta;
+}
+
+interface FrameResponse {
+  success: boolean;
+  error?: string;
+  matched?: boolean;
+  message?: string;
+  pose_progress?: number;
+  progress?: { current_step: number };
+  next_challenge?: Direction;
+  done?: boolean;
+}
+
+interface CompleteResponse {
+  success: boolean;
+  error?: string;
+  user_id?: string;
+  liveness_score?: number;
+  liveness_status?: string;
 }
 
 function computeDayLabel(dateStr?: string): string {
@@ -79,7 +100,7 @@ function getCameraErrorMessage(error: any): string {
   switch (name) {
     case "NotAllowedError":
     case "PermissionDeniedError":
-      return 'Akses kamera ditolak. Izinkan akses kamera pada browser Anda (ikon gembok di address bar), lalu klik "Nyalakan Kamera" lagi.';
+      return 'Akses kamera ditolak. Izinkan akses kamera pada browser Anda (ikon gembok di address bar), lalu coba lagi.';
     case "NotFoundError":
     case "DevicesNotFoundError":
       return "Kamera tidak ditemukan di perangkat ini. Pastikan perangkat Anda memiliki kamera yang aktif.";
@@ -95,6 +116,14 @@ function getCameraErrorMessage(error: any): string {
   }
 }
 
+/** Detect a "challenge out of order" error coming back from the biometric API,
+ *  so we can silently skip that single frame instead of hard-failing the whole session. */
+function isSequenceMismatchError(message?: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("tidak sesuai urutan") || m.includes("out of order") || m.includes("sequence");
+}
+
 /* ────────────────────────── TOAST ─────────────────────────── */
 function Toast({ message }: { message: string }) {
   return (
@@ -107,16 +136,485 @@ function Toast({ message }: { message: string }) {
   );
 }
 
+/* ═══════════════════════ BIOMETRIC SCAN MODAL ═══════════════════════
+   Fullscreen multi-angle liveness scan: CENTER → LEFT → RIGHT → UP/DOWN.
+   Talks to /api/user/biometric/{start,frame,complete,retry}. */
+interface BiometricScanModalProps {
+  onComplete: (userId: string, data: CompleteResponse) => void;
+  onCancel: () => void;
+  onError: (message: string) => void;
+}
+
+function BiometricScanModal({ onComplete, onCancel, onError }: BiometricScanModalProps) {
+  const [phase, setPhase] = useState<"starting" | "scanning" | "completing" | "status">("starting");
+  const [statusScreen, setStatusScreen] = useState<{ icon: string; title: string; sub?: string; withRetry?: boolean } | null>(null);
+
+  const [challengeSequence, setChallengeSequence] = useState<Direction[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [currentChallenge, setCurrentChallenge] = useState<Direction | null>(null);
+  const [instruction, setInstruction] = useState("Menyiapkan kamera…");
+  const [feedback, setFeedback] = useState("");
+  const [feedbackErr, setFeedbackErr] = useState(false);
+  const [ovalState, setOvalState] = useState<"idle" | "progress" | "near" | "matched" | "error">("idle");
+  const [flash, setFlash] = useState(false);
+  const [showCheck, setShowCheck] = useState(false);
+  const [showArrow, setShowArrow] = useState<ArrowDir>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const currentChallengeRef = useRef<Direction | null>(null);
+  const captureTimerRef = useRef<number | null>(null);
+  const frameInFlightRef = useRef(false);
+  const closedRef = useRef(false);
+  const flashTimeoutRef = useRef<number | null>(null);
+
+  // NEW: locks the capture loop during the window between "server matched this
+  // challenge" and "client has actually switched currentChallengeRef to the
+  // next one". Without this lock, a capture tick that fires inside that window
+  // sends a frame tagged with a stale/incorrect challenge and the server
+  // rejects it with "Challenge tidak sesuai urutan".
+  const transitioningRef = useRef(false);
+  const transitionTimeoutRef = useRef<number | null>(null);
+
+  const cleanupCamera = useCallback(() => {
+    if (captureTimerRef.current) {
+      window.clearInterval(captureTimerRef.current);
+      captureTimerRef.current = null;
+    }
+    if (flashTimeoutRef.current) window.clearTimeout(flashTimeoutRef.current);
+    if (transitionTimeoutRef.current) {
+      window.clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const applyChallenge = useCallback((challenge: Direction) => {
+    const meta = DIRECTION_META[challenge] || DIRECTION_META.CENTER;
+    currentChallengeRef.current = challenge;
+    setCurrentChallenge(challenge);
+    setInstruction(meta.label);
+    setFeedback("");
+    setFeedbackErr(false);
+    setOvalState("idle");
+    setShowCheck(false);
+    setShowArrow(meta.arrow);
+  }, []);
+
+  const startCaptureLoop = useCallback(() => {
+    if (captureTimerRef.current) window.clearInterval(captureTimerRef.current);
+    captureTimerRef.current = window.setInterval(() => {
+      captureAndSubmitRef.current();
+    }, BIO_CAPTURE_INTERVAL_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const complete = useCallback(async () => {
+    setPhase("completing");
+    setInstruction("Memverifikasi…");
+    setFeedback("");
+    try {
+      const resp = await fetch(`${BIOMETRIC_BASE}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionIdRef.current }),
+      });
+      const data: CompleteResponse = await resp.json();
+      if (!data.success || !data.user_id) {
+        setPhase("status");
+        setStatusScreen({ icon: "⚠️", title: "Verifikasi gagal", sub: data.error, withRetry: true });
+        return;
+      }
+      setPhase("status");
+      setStatusScreen({
+        icon: "✅",
+        title: "Wajah terverifikasi!",
+        sub: `Liveness score: ${((data.liveness_score || 0) * 100).toFixed(0)}%`,
+      });
+      cleanupCamera();
+      window.setTimeout(() => {
+        if (closedRef.current) return;
+        closedRef.current = true;
+        onComplete(data.user_id as string, data);
+      }, 900);
+    } catch (err: any) {
+      setPhase("status");
+      setStatusScreen({ icon: "⚠️", title: "Gagal menyelesaikan verifikasi", sub: err?.message, withRetry: true });
+      onError(err?.message || "Gagal menyelesaikan verifikasi");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanupCamera, onComplete, onError]);
+
+  const captureAndSubmit = useCallback(async () => {
+    if (
+      frameInFlightRef.current ||
+      transitioningRef.current || // NEW: skip capture entirely while switching challenges
+      closedRef.current ||
+      !sessionIdRef.current ||
+      !currentChallengeRef.current
+    ) return;
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+
+    frameInFlightRef.current = true;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL("image/jpeg", 0.85);
+
+      // Snapshot the challenge we're actually sending, in case it changes
+      // mid-flight (defensive — shouldn't happen now thanks to transitioningRef,
+      // but keeps the request/response pairing honest either way).
+      const sentChallenge = currentChallengeRef.current;
+
+      const resp = await fetch(`${BIOMETRIC_BASE}/frame`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionIdRef.current,
+          challenge: sentChallenge,
+          frame: imageData,
+        }),
+      });
+      const data: FrameResponse = await resp.json();
+
+      if (!data.success) {
+        // NEW: if this is just a sequence race (stale frame arrived after we'd
+        // already moved on), drop it silently instead of tearing down the
+        // whole session — it's not a real failure, just a late/duplicate frame.
+        if (isSequenceMismatchError(data.error)) {
+          console.warn("[BiometricScan] dropped stale/out-of-order frame:", data.error);
+          return;
+        }
+        if (captureTimerRef.current) {
+          window.clearInterval(captureTimerRef.current);
+          captureTimerRef.current = null;
+        }
+        setPhase("status");
+        setStatusScreen({ icon: "⚠️", title: "Sesi bermasalah", sub: data.error, withRetry: true });
+        return;
+      }
+
+      if (!data.matched) {
+        const isErr = data.pose_progress === undefined;
+        const progress = data.pose_progress || 0;
+        setFeedback(data.message || "Lanjutkan gerakan…");
+        setFeedbackErr(isErr);
+        if (isErr) {
+          setOvalState("error");
+        } else if (progress >= NEAR_MATCH_THRESHOLD) {
+          setOvalState("near");
+        } else if (progress > 0.05) {
+          setOvalState("progress");
+        } else {
+          setOvalState("idle");
+        }
+        return;
+      }
+
+      setFeedback("Bagus! Tertangkap wajahmu");
+      setFeedbackErr(false);
+      setOvalState("matched");
+      setShowCheck(true);
+      setShowArrow(null);
+      if (data.progress) setCurrentStep(data.progress.current_step);
+
+      setFlash(true);
+      if (flashTimeoutRef.current) window.clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = window.setTimeout(() => setFlash(false), 650);
+
+      if (data.done) {
+        // Lock capturing — we're finishing up, no more frames should go out.
+        transitioningRef.current = true;
+        if (captureTimerRef.current) {
+          window.clearInterval(captureTimerRef.current);
+          captureTimerRef.current = null;
+        }
+        await complete();
+      } else if (data.next_challenge) {
+        // NEW: lock the capture loop for the duration of the transition so no
+        // frame is captured/sent while currentChallengeRef still points at the
+        // challenge the server has already advanced past.
+        transitioningRef.current = true;
+        if (transitionTimeoutRef.current) window.clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = window.setTimeout(() => {
+          applyChallenge(data.next_challenge as Direction);
+          transitioningRef.current = false;
+          transitionTimeoutRef.current = null;
+        }, CHALLENGE_TRANSITION_MS);
+      }
+    } catch (err) {
+      console.error("[BiometricScan] frame submit error:", err);
+    } finally {
+      frameInFlightRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyChallenge, complete]);
+
+  const captureAndSubmitRef = useRef(captureAndSubmit);
+  useEffect(() => {
+    captureAndSubmitRef.current = captureAndSubmit;
+  }, [captureAndSubmit]);
+
+  const start = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: 1280, height: 720 },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err: any) {
+      setPhase("status");
+      setStatusScreen({ icon: "🚫", title: "Kamera tidak bisa diakses", sub: getCameraErrorMessage(err) });
+      onError(getCameraErrorMessage(err));
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${BIOMETRIC_BASE}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_slug: EVENT_SLUG, min_angles: MIN_ANGLES }),
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || "Gagal memulai sesi");
+
+      sessionIdRef.current = data.session_id;
+      setChallengeSequence(data.challenge);
+      setCurrentStep(0);
+      transitioningRef.current = false;
+      applyChallenge(data.challenge[0]);
+      setPhase("scanning");
+      startCaptureLoop();
+    } catch (err: any) {
+      setPhase("status");
+      setStatusScreen({ icon: "⚠️", title: "Gagal memulai verifikasi", sub: err?.message });
+      onError(err?.message || "Gagal memulai verifikasi");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyChallenge, startCaptureLoop, onError]);
+
+  const retryFromScratch = useCallback(async () => {
+    setStatusScreen(null);
+    setInstruction("Menyiapkan ulang…");
+    try {
+      if (sessionIdRef.current) {
+        await fetch(`${BIOMETRIC_BASE}/retry`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionIdRef.current, scope: "session" }),
+        }).catch(() => {});
+      }
+      const resp = await fetch(`${BIOMETRIC_BASE}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_slug: EVENT_SLUG, min_angles: MIN_ANGLES }),
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        setPhase("status");
+        setStatusScreen({ icon: "⚠️", title: "Gagal memulai ulang", sub: data.error, withRetry: true });
+        return;
+      }
+      sessionIdRef.current = data.session_id;
+      setChallengeSequence(data.challenge);
+      setCurrentStep(0);
+      transitioningRef.current = false;
+      applyChallenge(data.challenge[0]);
+      setPhase("scanning");
+      startCaptureLoop();
+    } catch (err: any) {
+      setPhase("status");
+      setStatusScreen({ icon: "⚠️", title: "Gagal memulai ulang", sub: err?.message, withRetry: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyChallenge, startCaptureLoop]);
+
+  useEffect(() => {
+    start();
+    document.body.style.overflow = "hidden";
+    return () => {
+      closedRef.current = true;
+      cleanupCamera();
+      document.body.style.overflow = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    closedRef.current = true;
+    cleanupCamera();
+    onCancel();
+  }, [cleanupCamera, onCancel]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [handleCancel]);
+
+  const ovalBorderColor =
+    ovalState === "matched" || ovalState === "near"
+      ? "#22c55e"
+      : ovalState === "progress"
+      ? "#facc15"
+      : ovalState === "error"
+      ? "#ef4444"
+      : "rgba(255,255,255,.5)";
+
+  return (
+    <div className="fixed inset-0 z-[99999] bg-[rgba(8,11,20,0.78)] backdrop-blur-md flex items-center justify-center">
+      <div
+        className="relative bg-[#05070d] overflow-hidden"
+        style={{
+          width: "min(400px, 92vw)",
+          height: "min(820px, 88vh)",
+          borderRadius: 44,
+          border: "8px solid #14171f",
+          boxShadow: "0 30px 80px -20px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04)",
+        }}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: "scaleX(-1)", background: "#000" }}
+        />
+
+        {/* Badge */}
+        <div className="absolute top-[18px] left-4 z-10 bg-[rgba(15,23,42,.55)] text-[#cfe0ff] text-[11px] font-semibold tracking-wide px-2.5 py-1.5 rounded-full backdrop-blur">
+          Verifikasi Wajah
+        </div>
+
+        {/* Close */}
+        <button
+          onClick={handleCancel}
+          aria-label="Tutup"
+          className="absolute top-[18px] right-4 z-10 w-[34px] h-[34px] rounded-full bg-[rgba(15,23,42,.55)] text-white text-lg flex items-center justify-center backdrop-blur hover:bg-[rgba(15,23,42,.75)]"
+        >
+          ×
+        </button>
+
+        {/* Progress dots */}
+        {phase === "scanning" && challengeSequence.length > 0 && (
+          <div className="absolute top-[62px] left-0 right-0 z-10 flex gap-1.5 justify-center">
+            {challengeSequence.map((_, i) => (
+              <div
+                key={i}
+                className="w-[9px] h-[9px] rounded-full transition-all"
+                style={{
+                  background: i < currentStep ? "#22c55e" : i === currentStep ? "#3b82f6" : "rgba(255,255,255,.28)",
+                  transform: i === currentStep ? "scale(1.4)" : undefined,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Guide oval */}
+        {phase !== "status" && (
+          <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center pointer-events-none pb-[12%]">
+            <div
+              className="relative"
+              style={{
+                width: "64%",
+                aspectRatio: "3 / 4",
+                borderRadius: "50%",
+                border: `4px solid ${ovalBorderColor}`,
+                boxShadow: flash
+                  ? "0 0 0 9999px rgba(34,197,94,.55), 0 0 40px 10px rgba(34,197,94,.8)"
+                  : ovalState === "matched" || ovalState === "near"
+                  ? "0 0 0 9999px rgba(5,7,13,.45), 0 0 26px 4px rgba(34,197,94,.55)"
+                  : "0 0 0 9999px rgba(5,7,13,.45)",
+                transition: "border-color .25s ease, box-shadow .25s ease",
+                animation: ovalState === "error" ? "bsm-shake .35s ease" : undefined,
+              }}
+            >
+              {showArrow && (
+                <div
+                  className="absolute w-[42px] h-[42px]"
+                  style={{
+                    filter: "drop-shadow(0 1px 3px rgba(0,0,0,.5))",
+                    animation: "bsm-pulse 1.1s ease-in-out infinite",
+                    ...(showArrow === "up" && { top: -56, left: "50%", transform: "translateX(-50%)" }),
+                    ...(showArrow === "down" && { bottom: -56, left: "50%", transform: "translateX(-50%) rotate(180deg)" }),
+                    ...(showArrow === "left" && { left: -56, top: "50%", transform: "translateY(-50%) rotate(-90deg)" }),
+                    ...(showArrow === "right" && { right: -56, top: "50%", transform: "translateY(-50%) rotate(90deg)" }),
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 4 L12 20 M12 4 L6 10 M12 4 L18 10" stroke="#facc15" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
+              <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${showCheck ? "opacity-100" : "opacity-0"}`}>
+                <svg viewBox="0 0 24 24" fill="none" className="w-[60px] h-[60px]">
+                  <circle cx="12" cy="12" r="11" fill="#22c55e" />
+                  <path d="M7 12.5 L10.5 16 L17 8.5" stroke="white" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Instruction sheet */}
+        {phase !== "status" && (
+          <div
+            className="absolute left-0 right-0 bottom-0 z-10 px-6 pt-9 pb-7 text-center"
+            style={{ background: "linear-gradient(to top, rgba(2,4,10,.92) 20%, rgba(2,4,10,0))" }}
+          >
+            <div className="text-white text-lg font-bold mb-1.5">{instruction}</div>
+            <div className={`text-[13px] min-h-[18px] ${feedbackErr ? "text-red-300" : "text-slate-300"}`}>{feedback}</div>
+          </div>
+        )}
+
+        {/* Status screen (success / error) */}
+        {phase === "status" && statusScreen && (
+          <div className="absolute inset-0 z-20 bg-[#05070d] flex flex-col items-center justify-center text-center px-8 gap-2.5">
+            <div className="text-[46px]">{statusScreen.icon}</div>
+            <div className="text-white text-[17px] font-bold">{statusScreen.title}</div>
+            {statusScreen.sub && <div className="text-slate-400 text-[13.5px] max-w-[260px]">{statusScreen.sub}</div>}
+            {statusScreen.withRetry && (
+              <button
+                onClick={retryFromScratch}
+                className="mt-3.5 px-5 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13.5px]"
+              >
+                🔄 Coba Lagi
+              </button>
+            )}
+          </div>
+        )}
+
+        <style>{`
+          @keyframes bsm-pulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+          @keyframes bsm-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════ */
 const EventPublicBayanOpenCraft = () => {
-  const [cameraActive, setCameraActive] = useState(false);
-  const [scanState, setScanState] = useState<ScanState>("idle");
-  const [scanLabel, setScanLabel] = useState("Mencari wajah…");
+  const [scanModalOpen, setScanModalOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "info" | "success" | "error"; text: string } | null>(null);
-  const [capturing, setCapturing] = useState(false);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
 
-  const [faceEmbedding, setFaceEmbedding] = useState<number[] | null>(null);
   const [allPhotos, setAllPhotos] = useState<Photo[]>([]);
   const [currentDay, setCurrentDay] = useState("all");
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -126,256 +624,18 @@ const EventPublicBayanOpenCraft = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectTimerRef = useRef<number | null>(null);
-  const stableCountRef = useRef(0);
-  const autoCaptureLockRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
 
   const visiblePhotos = currentDay === "all" ? allPhotos : allPhotos.filter((p) => p.metadata?.day === currentDay);
 
-  /* Restore previous session */
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const embedding = JSON.parse(stored);
-        setFaceEmbedding(embedding);
-        loadPhotos(embedding);
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* Load face-api.js from CDN once */
-  const ensureFaceApiScript = useCallback((): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (window.faceapi) return resolve();
-      const existing = document.querySelector(`script[src="${FACE_API_SRC}"]`);
-      if (existing) {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("face-api load failed")));
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = FACE_API_SRC;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("face-api load failed"));
-      document.body.appendChild(script);
-    });
-  }, []);
-
-  const ensureModelsLoaded = useCallback(async () => {
-    try {
-      await ensureFaceApiScript();
-      if (!window.faceapi) return false;
-      await window.faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL);
-      setModelsLoaded(true);
-      return true;
-    } catch (e) {
-      console.error("Gagal memuat model AI:", e);
-      setModelsLoaded(false);
-      return false;
-    }
-  }, [ensureFaceApiScript]);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  /* ══ CAMERA ══ */
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 640, height: 480 },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      setCameraActive(true);
-      setScanState("red");
-      setScanLabel("Menyiapkan AI deteksi wajah…");
-      setStatusMsg({ type: "info", text: "Kamera aktif. Posisikan wajah Anda di dalam bingkai." });
-
-      const ok = await ensureModelsLoaded();
-      if (ok) {
-        setScanState("red");
-        setScanLabel("Mencari wajah…");
-        stableCountRef.current = 0;
-        autoCaptureLockRef.current = false;
-        startDetectionLoop();
-      } else {
-        setScanState("red");
-        setScanLabel("Deteksi otomatis tidak tersedia");
-        setStatusMsg({ type: "error", text: 'Deteksi otomatis gagal dimuat — gunakan tombol "Ambil Manual" di bawah.' });
-      }
-    } catch (error) {
-      console.error("Camera error:", error);
-      setStatusMsg({ type: "error", text: getCameraErrorMessage(error) });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ensureModelsLoaded]);
-
-  const stopCamera = useCallback(() => {
-    if (detectTimerRef.current) {
-      window.clearInterval(detectTimerRef.current);
-      detectTimerRef.current = null;
-    }
-    stableCountRef.current = 0;
-    autoCaptureLockRef.current = false;
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraActive(false);
-    setScanState("idle");
-  }, []);
-
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  const runFaceDetection = useCallback(async () => {
-    if (autoCaptureLockRef.current) return;
-    const video = videoRef.current;
-    if (!video || video.readyState < 2 || !window.faceapi) return;
-
-    try {
-      const result = await window.faceapi.detectSingleFace(
-        video,
-        new window.faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
-      );
-
-      if (!result) {
-        stableCountRef.current = 0;
-        setScanState("red");
-        setScanLabel("Mencari wajah…");
-        return;
-      }
-
-      const box = result.box;
-      const vw = video.videoWidth, vh = video.videoHeight;
-      const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-      const centered = Math.abs(cx - vw / 2) < vw * 0.28 && Math.abs(cy - vh / 2) < vh * 0.28;
-      const bigEnough = box.width > vw * 0.18;
-
-      if (!centered || !bigEnough) {
-        stableCountRef.current = Math.max(0, stableCountRef.current - 1);
-        setScanState("yellow");
-        setScanLabel("Dekatkan & tengahkan wajah Anda");
-        return;
-      }
-
-      stableCountRef.current++;
-      if (stableCountRef.current < STABLE_FRAMES_NEEDED) {
-        setScanState("yellow");
-        setScanLabel("Tahan, jangan bergerak…");
-      } else {
-        setScanState("green");
-        setScanLabel("Terdeteksi! Mengambil foto…");
-        autoCaptureLockRef.current = true;
-        if (detectTimerRef.current) window.clearInterval(detectTimerRef.current);
-        window.setTimeout(() => captureAndRegister(), 350);
-      }
-    } catch (e) {
-      console.error("Deteksi wajah error:", e);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const startDetectionLoop = useCallback(() => {
-    if (detectTimerRef.current) window.clearInterval(detectTimerRef.current);
-    detectTimerRef.current = window.setInterval(runFaceDetection, DETECT_INTERVAL_MS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (cameraActive && modelsLoaded && !detectTimerRef.current) {
-      startDetectionLoop();
-    }
-  }, [cameraActive, modelsLoaded, startDetectionLoop]);
-
-  const captureAndRegister = useCallback(async () => {
-    if (detectTimerRef.current) {
-      window.clearInterval(detectTimerRef.current);
-      detectTimerRef.current = null;
-    }
-    autoCaptureLockRef.current = true;
-    setCapturing(true);
-
-    const video = videoRef.current;
-    if (!video) {
-      setCapturing(false);
-      return;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      setCapturing(false);
-      return;
-    }
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, -canvas.width, 0);
-    const imageData = canvas.toDataURL("image/jpeg", 0.85);
-
-    setStatusMsg({ type: "info", text: "Memproses wajah Anda…" });
-
-    try {
-      const res = await fetch(REGISTER_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData, event_slug: EVENT_SLUG }),
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        setFaceEmbedding(data.embedding);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.embedding));
-        setStatusMsg({ type: "success", text: "Wajah berhasil dikenali. Mencari foto Anda…" });
-        stopCamera();
-        window.setTimeout(() => loadPhotos(data.embedding), 700);
-      } else {
-        console.error("Register face gagal:", data.error);
-        setStatusMsg({
-          type: "error",
-          text: "Wajah belum berhasil dikenali. Coba lagi dengan pencahayaan lebih terang, hadapkan wajah lurus ke kamera, dan pastikan tidak terhalang masker atau kacamata gelap.",
-        });
-        setScanState("red");
-        setScanLabel("Gagal, coba lagi…");
-        stableCountRef.current = 0;
-        autoCaptureLockRef.current = false;
-        if (modelsLoaded && streamRef.current) startDetectionLoop();
-      }
-    } catch (error) {
-      console.error("Register face error:", error);
-      setStatusMsg({ type: "error", text: "Koneksi ke server bermasalah. Periksa koneksi internet Anda, lalu coba lagi." });
-      stableCountRef.current = 0;
-      autoCaptureLockRef.current = false;
-      if (modelsLoaded && streamRef.current) startDetectionLoop();
-    } finally {
-      setCapturing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelsLoaded, stopCamera, startDetectionLoop]);
-
-  /* ══ LOAD PHOTOS ══ */
-  const loadPhotos = useCallback(async (embedding: number[]) => {
+  const loadPhotos = useCallback(async (userId: string) => {
     setGallerySearched(true);
     setLoadingPhotos(true);
     try {
-      const res = await fetch(PHOTOS_ENDPOINT, {
+      const res = await fetch(PHOTOS_BY_USER_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ embedding, event_slug: EVENT_SLUG }),
+        body: JSON.stringify({ user_id: userId, event_slug: EVENT_SLUG }),
       });
       const data = await res.json();
 
@@ -396,10 +656,42 @@ const EventPublicBayanOpenCraft = () => {
     }
   }, []);
 
+  /* Restore previous session */
+  useEffect(() => {
+    const storedUserId = localStorage.getItem(STORAGE_KEY);
+    if (storedUserId) {
+      loadPhotos(storedUserId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const handleScanComplete = useCallback((userId: string, data: CompleteResponse) => {
+    localStorage.setItem(STORAGE_KEY, userId);
+    setScanModalOpen(false);
+    setStatusMsg({
+      type: "success",
+      text: `Wajah berhasil dikenali (liveness ${((data.liveness_score || 0) * 100).toFixed(0)}%). Mencari foto Anda…`,
+    });
+    loadPhotos(userId);
+  }, [loadPhotos]);
+
+  const handleScanCancel = useCallback(() => {
+    setScanModalOpen(false);
+  }, []);
+
+  const handleScanError = useCallback((message: string) => {
+    setStatusMsg({ type: "error", text: message });
+  }, []);
+
   const resetFaceData = useCallback(() => {
     if (!window.confirm("Ulangi pencarian wajah? Data wajah yang tersimpan akan dihapus dari perangkat ini.")) return;
     localStorage.removeItem(STORAGE_KEY);
-    setFaceEmbedding(null);
     setAllPhotos([]);
     setCurrentDay("all");
     setGallerySearched(false);
@@ -453,9 +745,6 @@ const EventPublicBayanOpenCraft = () => {
     return () => document.removeEventListener("keydown", onKey);
   }, [modalIndex, navigatePhoto]);
 
-  const scanColor =
-    scanState === "green" ? "#10b981" : scanState === "yellow" ? "#fbbf24" : "#ef4444";
-
   /* ══════════════════════════ RENDER ═══════════════════════════ */
   return (
     <div className="flex min-h-screen flex-col bg-white" style={{ fontFamily: "'Sora',system-ui,sans-serif" }}>
@@ -475,58 +764,51 @@ const EventPublicBayanOpenCraft = () => {
         .live-dot{animation:pulse-dot 1.8s ease-in-out infinite;}
         @keyframes fgcard{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
         .fg-card-in{animation:fgcard .5s ease-out forwards;}
-        @keyframes scanline{0%{top:6%}50%{top:92%}100%{top:6%}}
-        .scan-laser{animation:scanline 1.6s linear infinite;}
-        @keyframes tintpulse{0%,100%{opacity:.32}50%{opacity:.6}}
-        .tint-pulse{animation:tintpulse 1.2s ease infinite;}
       `}</style>
 
       <Header />
 
-    {/* ═══ HERO ═══════════════════════════════════════════════ */}
-    <section className="relative overflow-hidden pt-16 pb-14 md:pt-20 md:pb-16">
-    {/* Background photo collage */}
-    <div className="absolute inset-0 grid grid-cols-2 md:grid-cols-4">
-       {[
-        "https://ik.imagekit.io/zaekg3ju7/Bayan-1739_e0mi1r.jpg?updatedAt=1787801440413",
-        "https://ik.imagekit.io/zaekg3ju7/AR__2907.JPG?updatedAt=1787807725544",
-        "https://ik.imagekit.io/zaekg3ju7/AR__3022.JPG?updatedAt=1789117499043",
-        "https://ik.imagekit.io/zaekg3ju7/ALK_2912.JPG?updatedAt=1789117677832",
-        ].map((src, i) => (
-        <div key={i} className="relative h-full overflow-hidden bg-slate-800">
-            <img
-            src={src}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={(e) => {
-                (e.currentTarget.parentElement as HTMLElement).style.background = "linear-gradient(135deg,#1e293b,#0f172a)";
-                e.currentTarget.style.display = "none";
-            }}
-            />
+      {/* ═══ HERO ═══════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden pt-16 pb-14 md:pt-20 md:pb-16">
+        <div className="absolute inset-0 grid grid-cols-2 md:grid-cols-4">
+          {[
+            "https://ik.imagekit.io/zaekg3ju7/Bayan-1739_e0mi1r.jpg?updatedAt=1787801440413",
+            "https://ik.imagekit.io/zaekg3ju7/AR__2907.JPG?updatedAt=1787807725544",
+            "https://ik.imagekit.io/zaekg3ju7/AR__3022.JPG?updatedAt=1789117499043",
+            "https://ik.imagekit.io/zaekg3ju7/ALK_2912.JPG?updatedAt=1789117677832",
+          ].map((src, i) => (
+            <div key={i} className="relative h-full overflow-hidden bg-slate-800">
+              <img
+                src={src}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget.parentElement as HTMLElement).style.background = "linear-gradient(135deg,#1e293b,#0f172a)";
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            </div>
+          ))}
         </div>
-        ))}
-    </div>
-    {/* Black overlay for readability */}
-    <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
 
-    <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
-    <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
-
-    <div className="container max-w-4xl mx-auto px-6 relative text-center">
-        <div className="section-pill bg-white/10 text-blue-300 border border-white/20 mb-5 mx-auto w-fit backdrop-blur">
-        <span className="live-dot w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
-        Galeri Foto Berbasis Face AI
+        <div className="container max-w-4xl mx-auto px-6 relative text-center">
+          <div className="section-pill bg-white/10 text-blue-300 border border-white/20 mb-5 mx-auto w-fit backdrop-blur">
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+            Galeri Foto Berbasis Face AI
+          </div>
+          <h1 className="playfair text-4xl md:text-5xl font-black leading-tight text-white mb-3">
+            Galeri Foto {EVENT_NAME}
+          </h1>
+          <p className="text-slate-300 text-sm">
+            {EVENT_LOCATION} &nbsp;·&nbsp; {EVENT_DATE_LABEL}
+          </p>
         </div>
-        <h1 className="playfair text-4xl md:text-5xl font-black leading-tight text-white mb-3">
-        Galeri Foto {EVENT_NAME}
-        </h1>
-        <p className="text-slate-300 text-sm">
-        {EVENT_LOCATION} &nbsp;·&nbsp; {EVENT_DATE_LABEL}
-        </p>
-    </div>
-    </section>
+      </section>
 
-      {/* ═══ FACE REGISTRATION ══════════════════════════════════ */}
+      {/* ═══ FACE VERIFICATION (biometric liveness scan) ═══════════ */}
       {!gallerySearched && (
         <section className="py-6 bg-white">
           <div className="container max-w-2xl mx-auto px-6">
@@ -535,117 +817,20 @@ const EventPublicBayanOpenCraft = () => {
                 Cari Fotomu dengan Wajah
               </h2>
               <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-md mx-auto">
-                Nyalakan kamera, posisikan wajah di dalam bingkai, lalu ambil foto. Sistem akan mencari
-                semua foto pertandingan yang memuat wajah Anda.
+                Ikuti instruksi arah kepala di popup, lalu sistem akan
+                mencari semua foto yang memuat wajah Anda.
               </p>
 
-              {/* Camera frame */}
-              <div
-                className="relative w-full max-w-md mx-auto mb-6 rounded-3xl overflow-hidden border-[1.5px] bg-slate-900 transition-all duration-300"
-                style={{
-                  aspectRatio: "4/3",
-                  borderColor: cameraActive ? `${scanColor}b3` : "rgba(29,78,216,0.15)",
-                  boxShadow: cameraActive ? `0 0 0 3px ${scanColor}30, 0 0 40px 8px ${scanColor}40` : undefined,
-                }}
-              >
-                {!cameraActive && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/30">
-                    <Camera className="w-9 h-9" />
-                    <span className="text-xs font-bold tracking-widest uppercase">Kamera belum aktif</span>
-                  </div>
-                )}
-
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                  style={{ transform: "scaleX(-1)", display: cameraActive ? "block" : "none" }}
-                />
-
-                {cameraActive && (
-                  <>
-                    {/* Color wash */}
-                    <div
-                      className={`absolute inset-0 pointer-events-none mix-blend-screen ${scanState !== "green" ? "tint-pulse" : ""}`}
-                      style={{
-                        background: `radial-gradient(circle at 50% 45%, ${scanColor}d9 0%, ${scanColor}26 65%, transparent 100%)`,
-                        opacity: 0.45,
-                      }}
-                    />
-                    {/* Laser scan line */}
-                    {scanState !== "green" && (
-                      <div
-                        className="absolute left-0 right-0 h-0.5 scan-laser pointer-events-none"
-                        style={{ background: `linear-gradient(90deg, transparent, ${scanColor}, transparent)`, boxShadow: `0 0 12px 2px ${scanColor}cc` }}
-                      />
-                    )}
-                    {/* Scan corners */}
-                    <div className="absolute inset-[14%] pointer-events-none">
-                      {(["tl", "tr", "bl", "br"] as const).map((pos) => (
-                        <span
-                          key={pos}
-                          className="absolute w-6 h-6"
-                          style={{
-                            borderColor: scanColor,
-                            borderStyle: "solid",
-                            borderWidth: pos.includes("t") ? "3px 0 0 3px" : "0 0 3px 3px",
-                            ...(pos === "tl" && { top: 0, left: 0, borderRadius: "8px 0 0 0" }),
-                            ...(pos === "tr" && { top: 0, right: 0, borderWidth: "3px 3px 0 0", borderRadius: "0 8px 0 0" }),
-                            ...(pos === "bl" && { bottom: 0, left: 0, borderRadius: "0 0 0 8px" }),
-                            ...(pos === "br" && { bottom: 0, right: 0, borderWidth: "0 3px 3px 0", borderRadius: "0 0 8px 0" }),
-                          }}
-                        />
-                      ))}
-                    </div>
-                    {/* Traffic light */}
-                    <div className="absolute top-3 right-3 flex flex-col gap-1.5 bg-black/40 rounded-full px-1.5 py-2 backdrop-blur">
-                      {(["red", "yellow", "green"] as const).map((c) => (
-                        <span
-                          key={c}
-                          className="w-2 h-2 rounded-full"
-                          style={{
-                            background: scanState === c ? (c === "red" ? "#ef4444" : c === "yellow" ? "#fbbf24" : "#10b981") : "rgba(255,255,255,0.15)",
-                            boxShadow: scanState === c ? `0 0 8px 2px ${c === "red" ? "#ef4444" : c === "yellow" ? "#fbbf24" : "#10b981"}b3` : undefined,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    {/* Status pill */}
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-3 flex items-center gap-2 bg-black/55 backdrop-blur rounded-full px-4 py-1.5">
-                      <span
-                        className="w-1.5 h-1.5 rounded-full live-dot"
-                        style={{ background: scanColor }}
-                      />
-                      <span className="text-white text-xs font-bold tracking-wide uppercase whitespace-nowrap">{scanLabel}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
               <div className="flex gap-2.5 justify-center flex-wrap mb-5">
-                {!cameraActive ? (
-                  <button onClick={startCamera} className="btn-primary inline-flex items-center gap-2 text-white text-xs font-bold px-6 py-3 rounded-xl">
-                    <Camera className="w-3.5 h-3.5" /> Nyalakan Kamera
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={captureAndRegister}
-                      disabled={capturing}
-                      className="btn-primary inline-flex items-center gap-2 text-white text-xs font-bold px-6 py-3 rounded-xl"
-                    >
-                      Scan Manual
-                    </button>
-                    <button
-                      onClick={stopCamera}
-                      className="btn-outline inline-flex items-center gap-2 text-blue-600 text-xs font-bold px-6 py-3 rounded-xl bg-white"
-                    >
-                      Matikan Kamera
-                    </button>
-                  </>
-                )}
+                <button
+                  onClick={() => {
+                    setStatusMsg(null);
+                    setScanModalOpen(true);
+                  }}
+                  className="btn-primary inline-flex items-center gap-2 text-white text-xs font-bold px-6 py-3 rounded-xl"
+                >
+                  <Camera className="w-3.5 h-3.5" /> Nyalakan Kamera & Verifikasi
+                </button>
               </div>
 
               {statusMsg && (
@@ -664,6 +849,14 @@ const EventPublicBayanOpenCraft = () => {
             </div>
           </div>
         </section>
+      )}
+
+      {scanModalOpen && (
+        <BiometricScanModal
+          onComplete={handleScanComplete}
+          onCancel={handleScanCancel}
+          onError={handleScanError}
+        />
       )}
 
       {/* ═══ GALLERY ═════════════════════════════════════════════ */}
@@ -697,7 +890,6 @@ const EventPublicBayanOpenCraft = () => {
               </div>
             </div>
 
-            {/* Day tabs */}
             {allPhotos.length > 0 && (
               <div className="flex gap-2 flex-wrap mb-8">
                 {["all", ...Array.from({ length: EVENT_TOTAL_DAYS }, (_, i) => `Day ${i + 1}`)].map((d) => (
