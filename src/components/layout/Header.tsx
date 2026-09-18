@@ -42,7 +42,7 @@ export const Header = () => {
   ];
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-24 items-center justify-between py-2">
+      <div className="container flex h-16 md:h-24 items-center justify-between py-2">
         {/* Logo */}
         <Link
           to={isAuthenticated ? getDashboardLink() : "/"}
@@ -51,7 +51,7 @@ export const Header = () => {
           <img
             src="https://res.cloudinary.com/dwyi4d3rq/image/upload/v1765171746/ambilfoto-logo_hvn8s2.png"
             alt="Logo AmbilFoto.id"
-            className="h-28 w-auto"
+            className="h-16 w-auto sm:h-14 md:h-20 lg:h-28"
           />
         </Link>
 
