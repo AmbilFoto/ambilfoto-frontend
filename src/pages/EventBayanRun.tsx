@@ -15,19 +15,38 @@ const EVENT_TOTAL_DAYS = 1; // ganti kalau race day + expo dianggap multi-hari
 
 // ── Local backend (ganti ke domain production kalau sudah deploy) ──
 const API_BASE_URL = "http://localhost:5050";
-const BIOMETRIC_API_BASE = `${API_BASE_URL}/api/user/biometric`;
-const SCAN_MODAL_SCRIPT_URL = `${API_BASE_URL}/static/js/scan-modal.js`;
-const PHOTOS_ENDPOINT = `${API_BASE_URL}/api/user/my_photos_by_id`;
-const PREVIEW_MATCH_ENDPOINT = (filename: string) => `${API_BASE_URL}/api/user/preview_match_by_id/${filename}`;
-const IMAGE_ENDPOINT = (filename: string) => `${API_BASE_URL}/api/preview/${filename}`;
-const DOWNLOAD_ENDPOINT = (filename: string) => `${API_BASE_URL}/api/download/${filename}`;
-const STORAGE_KEY = `ambilfoto_user_id_${EVENT_SLUG}`;
+
+const BIOMETRIC_API_BASE =
+  `${API_BASE_URL}/api/user/biometric`;
+
+const AUDIO_BASE_URL =
+  `${API_BASE_URL}/api/audio`;
+
+const SCAN_MODAL_SCRIPT_URL =
+  `${API_BASE_URL}/static/js/scan-modal.js`;
+
+const PHOTOS_ENDPOINT =
+  `${API_BASE_URL}/api/user/my_photos_by_id`;
+
+const DOWNLOAD_ENDPOINT =
+  `${API_BASE_URL}/api/user/download`;
+
+const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
+  `${API_BASE_URL}/api/user/preview_match_by_id/${encodeURIComponent(filename)}`;
+
+const IMAGE_ENDPOINT = (filename: string) =>
+  `${API_BASE_URL}/api/preview/${encodeURIComponent(filename)}`;
+
+const STORAGE_KEY =
+  `ambilfoto_user_id_${EVENT_SLUG}`;
 
 declare global {
   interface Window {
     AmbilFotoScan: {
       open: (options: {
         apiBase: string;
+        audioBase?: string;
+        soundEnabled?: boolean;
         minAngles?: number;
         onComplete?: (data: any) => void;
         onCancel?: () => void;
@@ -46,7 +65,7 @@ interface PhotoMeta {
 }
 
 interface Photo {
-  photo_id?: string;
+  photo_id: string;
   filename: string;
   distance?: number;
   url?: string;
@@ -68,9 +87,106 @@ function computeDayLabel(dateStr?: string): string {
 function getPhotoImageUrl(photo: Photo) {
   return photo.preview_url || IMAGE_ENDPOINT(photo.filename);
 }
-function getPhotoDownloadUrl(photo: Photo) {
-  return photo.url || DOWNLOAD_ENDPOINT(photo.filename);
+
+function usePersonalPreview(
+  filename: string,
+  userId: string | null
+) {
+  const [src, setSrc] = useState<string>(() =>
+    IMAGE_ENDPOINT(filename)
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+
+    if (!userId) {
+      setSrc(IMAGE_ENDPOINT(filename));
+      return;
+    }
+
+    fetch(PREVIEW_MATCH_ENDPOINT(filename), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: userId,
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Personal preview gagal");
+        }
+
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSrc(IMAGE_ENDPOINT(filename));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [filename, userId]);
+
+  return src;
 }
+
+function PersonalPreviewImage({
+  photo,
+  userId,
+  className,
+}: {
+  photo: Photo;
+  userId: string | null;
+  className: string;
+}) {
+  const src = usePersonalPreview(photo.filename, userId);
+
+  return (
+    <img
+      src={src}
+      alt={photo.filename}
+      className={className}
+    />
+  );
+}
+
+function PhotoThumb({
+  photo,
+  userId,
+}: {
+  photo: Photo;
+  userId: string | null;
+}) {
+  const src = usePersonalPreview(
+    photo.filename,
+    userId
+  );
+
+  return (
+    <img
+      src={src}
+      alt={photo.filename}
+      loading="lazy"
+      className="w-full h-full object-cover"
+    />
+  );
+}
+
 
 /* ────────────────────────── TOAST ─────────────────────────── */
 function Toast({ message }: { message: string }) {
@@ -84,39 +200,6 @@ function Toast({ message }: { message: string }) {
   );
 }
 
-/* ─────────────────── PERSONAL MATCHED PREVIEW ───────────────────
-   Sama seperti flow ambilfoto.js: preview generic dulu, lalu ditukar
-   ke crop wajah pribadi via /api/user/preview_match_by_id. */
-function usePersonalPreview(filename: string, userId: string | null) {
-  const [src, setSrc] = useState<string>(() => IMAGE_ENDPOINT(filename));
-  useEffect(() => {
-    let objectUrl = "";
-    let cancelled = false;
-    if (!userId) return;
-    fetch(PREVIEW_MATCH_ENDPOINT(filename), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
-    })
-      .then((res) => (res.ok ? res.blob() : null))
-      .then((blob) => {
-        if (!blob || cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [filename, userId]);
-  return src;
-}
-
-function PhotoThumb({ photo, userId }: { photo: Photo; userId: string | null }) {
-  const src = usePersonalPreview(photo.filename, userId);
-  return <img src={src} alt={photo.filename} loading="lazy" className="w-full h-full object-cover" />;
-}
 
 /* ═══════════════════════════════════════════════════════════════ */
 const EventPublicBayanRun2026 = () => {
@@ -219,6 +302,8 @@ const EventPublicBayanRun2026 = () => {
 
     scanSessionRef.current = window.AmbilFotoScan.open({
       apiBase: BIOMETRIC_API_BASE,
+      audioBase: AUDIO_BASE_URL,
+      soundEnabled: true,
       minAngles: 4,
       onComplete: (data) => {
         scanSessionRef.current = null;
@@ -255,30 +340,72 @@ const EventPublicBayanRun2026 = () => {
   }, []);
 
   /* ══ DOWNLOAD ══ */
-  const downloadPhoto = useCallback(async (url: string, filename: string) => {
-    setDownloadingKey(filename);
+  const downloadPhoto = useCallback(
+  async (photo: Photo) => {
+    if (!userId) {
+      showToast("Sesi wajah belum tersedia.");
+      return;
+    }
+
+    if (!photo.photo_id) {
+      showToast("ID foto tidak tersedia.");
+      return;
+    }
+
+    setDownloadingKey(photo.filename);
     showToast("Mempersiapkan unduhan…");
+
     try {
-      const response = await fetch(url, { mode: "cors" });
-      if (!response.ok) throw new Error(`Respons server tidak OK (${response.status})`);
+      const response = await fetch(
+        DOWNLOAD_ENDPOINT,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            photo_id: photo.photo_id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          errorData?.error ||
+            `Download gagal (${response.status})`
+        );
+      }
+
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename || "foto.jpg";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
-      showToast("Unduhan dimulai — kualitas HD penuh.");
+
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = photo.filename || "foto.jpg";
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 4000);
+
+      showToast("Download dimulai.");
     } catch (error) {
       console.error("Download error:", error);
-      showToast("Tidak bisa mengunduh langsung, membuka foto di tab baru.");
-      window.open(url, "_blank");
+      showToast("Foto tidak dapat diunduh.");
     } finally {
       setDownloadingKey(null);
     }
-  }, [showToast]);
+  },
+  [userId, showToast]
+);
 
   /* ══ MODAL NAV ══ */
   const navigatePhoto = useCallback((direction: number) => {
@@ -298,6 +425,7 @@ const EventPublicBayanRun2026 = () => {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [modalIndex, navigatePhoto]);
+
 
   /* ══════════════════════════ RENDER ═══════════════════════════ */
   return (
@@ -491,7 +619,7 @@ const EventPublicBayanRun2026 = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          downloadPhoto(getPhotoDownloadUrl(photo), photo.filename);
+                          downloadPhoto(photo);
                         }}
                         disabled={downloadingKey === photo.filename}
                         className="absolute right-2.5 bottom-2.5 w-8 h-8 rounded-full bg-black/35 border border-white/25 flex items-center justify-center text-white/85 hover:bg-blue-600 hover:text-white transition-colors disabled:opacity-50"
@@ -537,9 +665,9 @@ const EventPublicBayanRun2026 = () => {
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-          <img
-            src={getPhotoImageUrl(visiblePhotos[modalIndex])}
-            alt="Foto lari"
+          <PersonalPreviewImage
+            photo={visiblePhotos[modalIndex]}
+            userId={userId}
             className="max-w-full max-h-full object-contain"
           />
           <a
@@ -555,7 +683,7 @@ const EventPublicBayanRun2026 = () => {
             onClick={(e) => {
               e.stopPropagation();
               const p = visiblePhotos[modalIndex];
-              downloadPhoto(getPhotoDownloadUrl(p), p.filename);
+              downloadPhoto(p);
             }}
             disabled={downloadingKey === visiblePhotos[modalIndex].filename}
             className="absolute right-7 bottom-4 text-white/70 hover:text-white transition-colors disabled:opacity-50"
