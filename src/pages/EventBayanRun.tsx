@@ -29,10 +29,10 @@ const PHOTOS_ENDPOINT =
   `${API_BASE_URL}/api/user/my_photos_by_id`;
 
 const DOWNLOAD_ENDPOINT =
-  `${API_BASE_URL}/api/user/download`;
+  `${API_BASE_URL}/api/user/download_encrypted`;
 
 const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
-  `${API_BASE_URL}/api/user/preview_match_by_id/${encodeURIComponent(filename)}`;
+  `${API_BASE_URL}/api/user/preview_match_encrypted_by_id/${encodeURIComponent(filename)}`;
 
 const STORAGE_KEY =
   `ambilfoto_user_id_${EVENT_SLUG}`;
@@ -81,8 +81,68 @@ function computeDayLabel(dateStr?: string): string {
   return `Day ${dayNum}`;
 }
 
-function getPhotoImageUrl(photo: Photo) {
-  return photo.preview_url || (photo.filename);
+let deviceKeyPairPromise: Promise<CryptoKeyPair> | null = null;
+
+function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+async function getDeviceKeyPair(): Promise<CryptoKeyPair> {
+  if (!deviceKeyPairPromise) {
+    deviceKeyPairPromise = crypto.subtle.generateKey(
+      {
+        name: "RSA-OAEP",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
+      true,
+      ["encrypt", "decrypt"]
+    ) as Promise<CryptoKeyPair>;
+  }
+
+  return deviceKeyPairPromise;
+}
+
+async function decryptEncryptedResponse(
+  response: Response,
+  keyPair: CryptoKeyPair
+): Promise<ArrayBuffer> {
+  const ciphertext = await response.arrayBuffer();
+  const wrappedDek = base64ToArrayBuffer(
+    response.headers.get("X-Wrapped-DEK") || ""
+  );
+  const fileNonce = base64ToArrayBuffer(
+    response.headers.get("X-Encrypted-File-Nonce") || ""
+  );
+
+  if (!wrappedDek.byteLength || fileNonce.byteLength !== 12) {
+    throw new Error("Metadata enkripsi tidak lengkap");
+  }
+
+  const dek = await crypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    keyPair.privateKey,
+    wrappedDek
+  );
+  const aesKey = await crypto.subtle.importKey(
+    "raw",
+    dek,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  return crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: fileNonce },
+    aesKey,
+    ciphertext
+  );
 }
 
 function usePersonalPreview(
@@ -101,31 +161,36 @@ function usePersonalPreview(
       return;
     }
 
-    fetch(PREVIEW_MATCH_ENDPOINT(filename), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ user_id: userId }),
-    })
-      .then((response) => {
+    async function loadPreview() {
+      try {
+        const keyPair = await getDeviceKeyPair();
+        const publicKey = await crypto.subtle.exportKey(
+          "jwk",
+          keyPair.publicKey
+        );
+        const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, public_key: publicKey }),
+        });
+
         if (!response.ok) {
           throw new Error("Personal preview gagal");
         }
-        return response.blob();
-      })
-      .then((blob) => {
+
+        const plaintext = await decryptEncryptedResponse(response, keyPair);
         if (cancelled) return;
 
+        const blob = new Blob([plaintext], { type: "image/jpeg" });
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Preview gagal:", error);
-        if (!cancelled) {
-          setSrc(null);
-        }
-      });
+        if (!cancelled) setSrc(null);
+      }
+    }
+
+    loadPreview();
 
     return () => {
       cancelled = true;
@@ -172,13 +237,15 @@ function PhotoThumb({
     userId
   );
 
-  return (
+  return src ? (
     <img
       src={src}
-      alt={photo.filename}
+      alt="Foto hasil pencarian"
       loading="lazy"
       className="w-full h-full object-cover"
     />
+  ) : (
+    <div className="w-full h-full bg-slate-900 animate-pulse" />
   );
 }
 
@@ -351,6 +418,11 @@ const EventPublicBayanRun2026 = () => {
     showToast("Mempersiapkan unduhan…");
 
     try {
+      const keyPair = await getDeviceKeyPair();
+      const publicKey = await crypto.subtle.exportKey(
+        "jwk",
+        keyPair.publicKey
+      );
       const response = await fetch(
         DOWNLOAD_ENDPOINT,
         {
@@ -361,6 +433,7 @@ const EventPublicBayanRun2026 = () => {
           body: JSON.stringify({
             user_id: userId,
             photo_id: photo.photo_id,
+            public_key: publicKey,
           }),
         }
       );
@@ -376,7 +449,8 @@ const EventPublicBayanRun2026 = () => {
         );
       }
 
-      const blob = await response.blob();
+      const plaintext = await decryptEncryptedResponse(response, keyPair);
+      const blob = new Blob([plaintext], { type: "image/jpeg" });
       const blobUrl = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
