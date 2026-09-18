@@ -34,9 +34,6 @@ const DOWNLOAD_ENDPOINT =
 const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
   `${API_BASE_URL}/api/user/preview_match_by_id/${encodeURIComponent(filename)}`;
 
-const IMAGE_ENDPOINT = (filename: string) =>
-  `${API_BASE_URL}/api/preview/${encodeURIComponent(filename)}`;
-
 const STORAGE_KEY =
   `ambilfoto_user_id_${EVENT_SLUG}`;
 
@@ -85,23 +82,22 @@ function computeDayLabel(dateStr?: string): string {
 }
 
 function getPhotoImageUrl(photo: Photo) {
-  return photo.preview_url || IMAGE_ENDPOINT(photo.filename);
+  return photo.preview_url || (photo.filename);
 }
 
 function usePersonalPreview(
   filename: string,
   userId: string | null
 ) {
-  const [src, setSrc] = useState<string>(() =>
-    IMAGE_ENDPOINT(filename)
-  );
+  const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
 
+    setSrc(null);
+
     if (!userId) {
-      setSrc(IMAGE_ENDPOINT(filename));
       return;
     }
 
@@ -110,15 +106,12 @@ function usePersonalPreview(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        user_id: userId,
-      }),
+      body: JSON.stringify({ user_id: userId }),
     })
       .then((response) => {
         if (!response.ok) {
           throw new Error("Personal preview gagal");
         }
-
         return response.blob();
       })
       .then((blob) => {
@@ -127,15 +120,15 @@ function usePersonalPreview(
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error("Preview gagal:", error);
         if (!cancelled) {
-          setSrc(IMAGE_ENDPOINT(filename));
+          setSrc(null);
         }
       });
 
     return () => {
       cancelled = true;
-
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -156,12 +149,14 @@ function PersonalPreviewImage({
 }) {
   const src = usePersonalPreview(photo.filename, userId);
 
-  return (
+  return src ? (
     <img
       src={src}
-      alt={photo.filename}
+      alt="Foto hasil pencarian"
       className={className}
     />
+  ) : (
+    <div className={`${className} bg-slate-900 animate-pulse`} />
   );
 }
 
