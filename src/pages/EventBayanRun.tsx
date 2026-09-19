@@ -82,6 +82,22 @@ function computeDayLabel(dateStr?: string): string {
 }
 
 let deviceKeyPairPromise: Promise<CryptoKeyPair> | null = null;
+let activePreviewRequests = 0;
+const previewWaiters: Array<() => void> = [];
+
+async function acquirePreviewSlot(): Promise<() => void> {
+  if (activePreviewRequests < 3) {
+    activePreviewRequests += 1;
+  } else {
+    await new Promise<void>((resolve) => previewWaiters.push(resolve));
+    activePreviewRequests += 1;
+  }
+
+  return () => {
+    activePreviewRequests = Math.max(0, activePreviewRequests - 1);
+    previewWaiters.shift()?.();
+  };
+}
 
 function base64ToArrayBuffer(value: string): ArrayBuffer {
   const binary = atob(value);
@@ -162,7 +178,9 @@ function usePersonalPreview(
     }
 
     async function loadPreview() {
+      let releasePreviewSlot: (() => void) | null = null;
       try {
+        releasePreviewSlot = await acquirePreviewSlot();
         const keyPair = await getDeviceKeyPair();
         const publicKey = await crypto.subtle.exportKey(
           "jwk",
@@ -187,6 +205,8 @@ function usePersonalPreview(
       } catch (error) {
         console.error("Preview gagal:", error);
         if (!cancelled) setSrc(null);
+      } finally {
+        releasePreviewSlot?.();
       }
     }
 
@@ -558,8 +578,7 @@ const EventPublicBayanRun2026 = () => {
                 Cari Fotomu dengan Wajah
               </h2>
               <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-md mx-auto">
-                Klik tombol di bawah, lalu ikuti instruksi arah kepala di layar. Proses ini juga
-                memastikan yang scan adalah orang asli, bukan foto/video. Sistem akan mencari semua
+                Klik tombol di bawah, lalu ikuti instruksi arah kepala di layar. Sistem akan mencari semua
                 foto lari yang memuat wajah Anda.
               </p>
 
