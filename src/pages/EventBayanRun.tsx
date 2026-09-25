@@ -14,7 +14,7 @@ const EVENT_START_DATE = "2026-10-10";
 const EVENT_TOTAL_DAYS = 1; // ganti kalau race day + expo dianggap multi-hari
 
 // ── Local backend (ganti ke domain production kalau sudah deploy) ──
-const API_BASE_URL = "http://localhost:5050";
+const API_BASE_URL = "https://engine-af.ambilfoto.id/";
 
 const BIOMETRIC_API_BASE =
   `${API_BASE_URL}/api/user/biometric`;

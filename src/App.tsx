@@ -155,7 +155,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
+            <Route path="/login-test" element={<Login />} />
             <Route path="/logout" element={<Navigate to="/login" replace />} />
             <Route path="/about" element={<About />} />
             <Route path="/features" element={<Features />} />
@@ -164,8 +164,8 @@ const App = () => (
             <Route path="/docs" element={<DeveloperDocs/>}/>
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot" element={<ForgotPassword />} />
+            <Route path="/register-testing" element={<Register />} />
+            <Route path="/forgot-testing" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/register/face" element={<RegisterFace />} />
