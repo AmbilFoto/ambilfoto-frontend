@@ -226,6 +226,10 @@ function BillingToggle({ value, onChange, plans }: {
 /* ─────────────────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────────────────── */
+
+// TODO: ganti dengan nomor WhatsApp sales yang sebenarnya (format: kode negara tanpa "+" atau "0" di depan)
+const WHATSAPP_SALES_NUMBER = "6281234567890";
+
 const DeveloperPricing = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,17 +250,32 @@ const DeveloperPricing = () => {
   }, []);
 
   const handleSelect = (plan: Plan) => {
-    if (plan.is_custom) { window.open("mailto:support@ambilfoto.id?subject=Custom API Plan", "_blank"); return; }
-    if (!isAuthenticated) {
-      sessionStorage.setItem("pending_plan_id", plan.id);
-      sessionStorage.setItem("pending_billing_cycle", billingCycle);
-      navigate(`/login?redirect=${encodeURIComponent(`/developer/checkout?plan_id=${plan.id}&billing_cycle=${billingCycle}`)}`);
-      return;
-    }
-    navigate(`/developer/checkout?plan_id=${plan.id}&billing_cycle=${billingCycle}`);
+    // ─── Alur pembayaran/login asli — dinonaktifkan sementara ───
+    // if (plan.is_custom) {
+    //   window.open("mailto:support@ambilfoto.id?subject=Custom API Plan", "_blank");
+    //   return;
+    // }
+    // if (!isAuthenticated) {
+    //   sessionStorage.setItem("pending_plan_id", plan.id);
+    //   sessionStorage.setItem("pending_billing_cycle", billingCycle);
+    //   navigate(`/login?redirect=${encodeURIComponent(`/developer/checkout?plan_id=${plan.id}&billing_cycle=${billingCycle}`)}`);
+    //   return;
+    // }
+    // navigate(`/developer/checkout?plan_id=${plan.id}&billing_cycle=${billingCycle}`);
+
+    // ─── Sementara: semua paket arahkan ke WhatsApp sales ───────
+    const cycleLabel = billingCycle === "yearly" ? "Tahunan" : "Bulanan";
+    const message = encodeURIComponent(
+      `Halo, saya tertarik dengan paket ${plan.name} (${cycleLabel}). Bisa dibantu proses selanjutnya?`
+    );
+    window.open(`https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${message}`, "_blank");
   };
 
-  const popularIndex = plans.findIndex(p => p.slug === "developer" || p.slug === "super-2");
+  // Plan custom/enterprise selalu ditaruh paling akhir, apa pun urutan dari API —
+  // supaya tidak "kesisipan" di tengah baris pertama.
+  const sortedPlans = [...plans].sort((a, b) => Number(a.is_custom) - Number(b.is_custom));
+
+  const popularIndex = sortedPlans.findIndex(p => p.slug === "developer" || p.slug === "super-2");
 
   const features = [
     { Icon: Code2,      l: "API Dual Key",      d: "Dev + Production key"   },
@@ -380,15 +399,29 @@ const DeveloperPricing = () => {
 
           <BillingToggle value={billingCycle} onChange={setBillingCycle} plans={plans} />
 
+          {/*
+            NOTE: menggunakan flex + flex-wrap (bukan grid) supaya baris terakhir
+            yang tidak penuh (mis. 5 plan → 4 + 1) otomatis ter-center, bukan
+            nempel rata kiri seperti pada grid biasa.
+          */}
           {loading ? (
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[420px] rounded-2xl" />)}
+            <div className="flex flex-wrap justify-center gap-5">
+              {[1, 2, 3, 4].map(i => (
+                <Skeleton
+                  key={i}
+                  className="h-[420px] rounded-2xl w-full md:w-[calc(50%-10px)] lg:w-[calc(33.333%-13.33px)]"
+                />
+              ))}
             </div>
           ) : (
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {plans.map((plan, i) => (
+            <div className="flex flex-wrap justify-center gap-5">
+              {sortedPlans.map((plan, i) => (
                 // Each wrapper gets .rv — MutationObserver will pick it up
-                <div key={plan.id} className="rv rv-u" data-i={i % 4}>
+                <div
+                  key={plan.id}
+                  className="rv rv-u w-full md:w-[calc(50%-10px)] lg:w-[calc(33.333%-13.33px)]"
+                  data-i={i % 4}
+                >
                   <PlanCard
                     plan={plan}
                     billingCycle={billingCycle}
