@@ -375,7 +375,7 @@ function PricingSection() {
         )}
 
         {!loading && !error && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+         <div className="flex flex-wrap justify-center gap-6">
             {plans.map((plan) => {
               const isPopular = plan.slug === popularSlug;
               return (
@@ -600,8 +600,7 @@ const Index = () => {
         <div className="container max-w-7xl mx-auto px-6 relative">
           <div className="grid lg:grid-cols-2 gap-14 items-center">
             <div>
-              <div className="hero-badge section-pill bg-blue-50 text-blue-700 border border-blue-200/80 mb-6 w-fit" style={{visibility:"hidden"}}>
-                <span className="live-dot w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+              <div className="hero-badge section-pill bg-blue-500 text-white border border-blue-200/80 mb-6 w-fit" style={{visibility:"hidden"}}>
                 AI-Powered Photo Marketplace
               </div>
 
@@ -640,6 +639,44 @@ const Index = () => {
         </div>
       </section>
 
+        {/* ═══ EVENT PUBLIK ═══════════════════════════════════════ */}
+      <section className="events-section py-20 bg-slate-50/70">
+        <div className="container max-w-6xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+            <div>
+              <div className="section-pill bg-amber-500 text-white border border-amber-100 mb-3">🔥 Event Publik</div>
+              <h2 className="playfair text-4xl md:text-5xl font-black text-slate-900 leading-tight">
+                In Collaboration<br /><span className="gradient-text-warm">Event Saat Ini</span>
+              </h2>
+            </div>
+            <p className="text-slate-500 text-sm max-w-sm">
+              Temukan dirimu di foto-foto event yang sedang berlangsung dengan AI Face Recognition.
+            </p>
+          </div>
+         <div className="grid sm:grid-cols-2 gap-6">
+            <div className="event-card-anim">
+              <EventCard
+                logos={[
+                  "https://res.cloudinary.com/viecqvpk/image/upload/q_auto/f_auto/v1786581021/bayanopen-logo_mfcb55_rk41oh.webp",
+                  "https://res.cloudinary.com/viecqvpk/image/upload/v1789114756/LOGO_EVENT_Bayan_2026_jolyfx.png",
+                ]}
+                title="Bayan Open & Craft Art Festival 2026"
+                subtitle="Turnamen Olahraga & Festival Seni · Balikpapan"
+                href="/event-public/bayan-open-craft"
+              />
+            </div>
+            <div className="event-card-anim">
+              <EventCard
+                logos={["https://ik.imagekit.io/nwtwwkdgu/LOGO_BR2026_vbixvo.webp?updatedAt=1787729796492"]}
+                title="Bayan Run 2026"
+                subtitle="Fun Run · Segera Hadir"
+                disabled
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ═══ HOW IT WORKS ═══════════════════════════════════════ */}
      <section className="how-section py-20 bg-white">
         <div className="container max-w-6xl mx-auto px-6">
@@ -662,7 +699,7 @@ const Index = () => {
                 </div>
                 <div>
                   <p className="font-bold text-slate-900">Untuk Kamu yang Mencari Foto</p>
-                  <p className="text-xs text-slate-400">Gratis — tanpa biaya langganan</p>
+                  <p className="text-xs text-slate-400">Gratis tanpa biaya langganan</p>
                 </div>
               </div>
               <div className="space-y-4">
@@ -693,14 +730,14 @@ const Index = () => {
                 </div>
                 <div>
                   <p className="font-bold text-slate-900">Untuk Fotografer Profesional</p>
-                  <p className="text-xs text-slate-400">Monetize karya — komisi kompetitif</p>
+                  <p className="text-xs text-slate-400">Monetize karya, komisi kompetitif</p>
                 </div>
               </div>
               <div className="space-y-4">
                 {[
                   { step: "01", icon: Download, title: "Upload Koleksi Event", desc: "Upload foto event dalam batch besar. Sistem kami auto-tag dan kategorikan." },
                   { step: "02", icon: ImageIcon, title: "AI Tagging Otomatis", desc: "Face recognition auto-link foto ke profil pembeli yang tepat." },
-                  { step: "03", icon: TrendingUp, title: "Terima Pembayaran", desc: "Komisi 70% per penjualan. Cairkan kapan saja ke rekening bankmu." },
+                  { step: "03", icon: TrendingUp, title: "Terima Pembayaran", desc: "Komisi per penjualan. Cairkan kapan saja ke rekening bankmu." },
                 ].map(s => (
                   <div key={s.step} className="step-item flex items-start gap-4 p-4 rounded-xl hover:bg-orange-50/50 transition-colors">
                     <div className="shrink-0 w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
@@ -719,43 +756,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ═══ EVENT PUBLIK ═══════════════════════════════════════ */}
-      <section className="events-section py-20 bg-slate-50/70">
-        <div className="container max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-            <div>
-              <div className="section-pill bg-amber-50 text-amber-700 border border-amber-100 mb-3">🔥 Event Publik</div>
-              <h2 className="playfair text-4xl md:text-5xl font-black text-slate-900 leading-tight">
-                Galeri Foto<br /><span className="gradient-text-warm">Event Saat Ini</span>
-              </h2>
-            </div>
-            <p className="text-slate-500 text-sm max-w-sm">
-              Temukan dirimu di foto-foto event yang sedang berlangsung dengan AI Face Recognition.
-            </p>
-          </div>
-         <div className="grid sm:grid-cols-2 gap-6">
-            <div className="event-card-anim">
-              <EventCard
-                logos={[
-                  "https://res.cloudinary.com/viecqvpk/image/upload/q_auto/f_auto/v1786581021/bayanopen-logo_mfcb55_rk41oh.webp",
-                  "https://res.cloudinary.com/viecqvpk/image/upload/v1789114756/LOGO_EVENT_Bayan_2026_jolyfx.png",
-                ]}
-                title="Bayan Open & Craft Art Festival 2026"
-                subtitle="Turnamen Olahraga & Festival Seni · Balikpapan"
-                href="/event-public/bayan-open-craft"
-              />
-            </div>
-            <div className="event-card-anim">
-              <EventCard
-                logos={["https://ik.imagekit.io/nwtwwkdgu/LOGO_BR2026_vbixvo.webp?updatedAt=1787729796492"]}
-                title="Bayan Run 2026"
-                subtitle="Fun Run · Segera Hadir"
-                disabled
-              />
-            </div>
-          </div>
-        </div>
-      </section>
+    
 
       {/* ═══ PHOTOGRAPHERS ══════════════════════════════════════ 
       <section className="photographers-section py-20 bg-white">
@@ -855,10 +856,10 @@ const Index = () => {
               </p>
               <div className="space-y-5">
                 {[
-                  { icon:Zap,    title:"Kecepatan Kilat",  desc:"Scan 10.000+ foto dalam < 2 detik dengan GPU-accelerated AI.",          color:"bg-amber-50 text-amber-600" },
-                  { icon:Shield, title:"Privacy-First",    desc:"Face embeddings dienkripsi AES-256. Kami tidak simpan foto wajahmu.",   color:"bg-emerald-50 text-emerald-600" },
-                  { icon:Eye,    title:"95%+ Akurasi",     desc:"Model terlatih pada 10M+ foto event Indonesia.",                        color:"bg-blue-50 text-blue-600" },
-                  { icon:Layers, title:"Multi-Event",      desc:"Satu akun untuk semua event. Wisuda, konser, konferensi — terkumpul.",  color:"bg-violet-50 text-violet-600" },
+                  { icon:Zap,    title:"Kecepatan Kilat",  desc:"Scan foto dalam beberapa detik dengan AI.",          color:"bg-amber-50 text-amber-600" },
+                  { icon:Shield, title:"Privacy-First",    desc:"Face embeddings dienkripsi. Kami tidak simpan foto wajahmu.",   color:"bg-emerald-50 text-emerald-600" },
+                  { icon:Eye,    title:"95%+ Akurasi",     desc:"Model terlatih pada foto event Indonesia.",                        color:"bg-blue-50 text-blue-600" },
+                  { icon:Layers, title:"Multi-Event",      desc:"Satu akun untuk semua event. Wisuda, konser, konferensi terkumpul.",  color:"bg-violet-50 text-violet-600" },
                 ].map((b,i) => (
                   <div key={i} className="ai-item flex items-start gap-4">
                     <div className={`shrink-0 w-11 h-11 rounded-xl ${b.color} flex items-center justify-center`}>
