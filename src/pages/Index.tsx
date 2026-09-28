@@ -669,8 +669,8 @@ const Index = () => {
               <EventCard
                 logos={["https://ik.imagekit.io/nwtwwkdgu/LOGO_BR2026_vbixvo.webp?updatedAt=1787729796492"]}
                 title="Bayan Run 2026"
-                subtitle="Fun Run · Segera Hadir"
-                disabled
+                subtitle="Fun Run"
+                href="/event-public/bayan-run-2026"
               />
             </div>
           </div>
