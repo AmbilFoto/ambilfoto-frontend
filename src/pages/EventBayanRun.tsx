@@ -13,8 +13,7 @@ const EVENT_DATE_LABEL = "10-11 Oktober 2026";
 const EVENT_START_DATE = "2026-10-10";
 const EVENT_TOTAL_DAYS = 1; // ganti kalau race day + expo dianggap multi-hari
 
-// ── Local backend (ganti ke domain production kalau sudah deploy) ──
-const API_BASE_URL = "https://engine-af.ambilfoto.id/";
+const API_BASE_URL = "http://localhost:5050"; // ganti sesuai server lokal Anda
 
 const BIOMETRIC_API_BASE =
   `${API_BASE_URL}/api/user/biometric`;
@@ -33,6 +32,9 @@ const DOWNLOAD_ENDPOINT =
 
 const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
   `${API_BASE_URL}/api/user/preview_match_encrypted_by_id/${encodeURIComponent(filename)}`;
+
+const PREVIEW_CACHE_KEY_ENDPOINT = (filename: string) =>
+  `${API_BASE_URL}/api/user/preview_cache_key_by_id/${encodeURIComponent(filename)}`;
 
 const STORAGE_KEY =
   `ambilfoto_user_id_${EVENT_SLUG}`;
@@ -68,6 +70,20 @@ interface Photo {
   url?: string;
   preview_url?: string;
   metadata?: PhotoMeta;
+}
+
+interface PreviewAsset {
+  src: string;
+  matchedFaces: number[][];
+  width: number | null;
+  height: number | null;
+}
+
+interface PreviewPayload {
+  bytes: ArrayBuffer;
+  matchedFaces: number[][];
+  width: number | null;
+  height: number | null;
 }
 
 function computeDayLabel(dateStr?: string): string {
@@ -129,13 +145,22 @@ async function decryptEncryptedResponse(
   response: Response,
   keyPair: CryptoKeyPair
 ): Promise<ArrayBuffer> {
-  const ciphertext = await response.arrayBuffer();
-  const wrappedDek = base64ToArrayBuffer(
-    response.headers.get("X-Wrapped-DEK") || ""
+  return decryptPreviewCiphertext(
+    await response.arrayBuffer(),
+    response.headers.get("X-Wrapped-DEK") || "",
+    response.headers.get("X-Encrypted-File-Nonce") || "",
+    keyPair
   );
-  const fileNonce = base64ToArrayBuffer(
-    response.headers.get("X-Encrypted-File-Nonce") || ""
-  );
+}
+
+async function decryptPreviewCiphertext(
+  ciphertext: ArrayBuffer,
+  wrappedDekValue: string,
+  fileNonceValue: string,
+  keyPair: CryptoKeyPair
+): Promise<ArrayBuffer> {
+  const wrappedDek = base64ToArrayBuffer(wrappedDekValue);
+  const fileNonce = base64ToArrayBuffer(fileNonceValue);
 
   if (!wrappedDek.byteLength || fileNonce.byteLength !== 12) {
     throw new Error("Metadata enkripsi tidak lengkap");
@@ -161,19 +186,77 @@ async function decryptEncryptedResponse(
   );
 }
 
+async function fetchPreviewBytes(
+  filename: string,
+  userId: string,
+  keyPair: CryptoKeyPair
+): Promise<PreviewPayload> {
+  try {
+    const keyResponse = await fetch(PREVIEW_CACHE_KEY_ENDPOINT(filename), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        public_key: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
+      }),
+    });
+
+    if (keyResponse.ok) {
+      const keyData = await keyResponse.json();
+      const imageResponse = await fetch(keyData.url, { cache: "force-cache" });
+      if (!imageResponse.ok) {
+        throw new Error(`CDN preview gagal (${imageResponse.status})`);
+      }
+      const bytes = await decryptPreviewCiphertext(
+        await imageResponse.arrayBuffer(),
+        keyData.wrapped_dek,
+        keyData.file_nonce,
+        keyPair
+      );
+      return {
+        bytes,
+        matchedFaces: Array.isArray(keyData.matched_faces) ? keyData.matched_faces : [],
+        width: Number.isFinite(keyData.preview_width) ? keyData.preview_width : null,
+        height: Number.isFinite(keyData.preview_height) ? keyData.preview_height : null,
+      };
+    }
+  } catch (error) {
+    console.warn("Encrypted CDN preview tidak tersedia, memakai fallback:", error);
+  }
+
+  const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      public_key: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error("Personal preview gagal");
+  }
+  return {
+    bytes: await decryptEncryptedResponse(response, keyPair),
+    matchedFaces: [],
+    width: null,
+    height: null,
+  };
+}
+
 function usePersonalPreview(
   filename: string,
-  userId: string | null
+  userId: string | null,
+  enabled = true
 ) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewAsset | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
 
-    setSrc(null);
+    setPreview(null);
 
-    if (!userId) {
+    if (!userId || !enabled) {
       return;
     }
 
@@ -182,29 +265,15 @@ function usePersonalPreview(
       try {
         releasePreviewSlot = await acquirePreviewSlot();
         const keyPair = await getDeviceKeyPair();
-        const publicKey = await crypto.subtle.exportKey(
-          "jwk",
-          keyPair.publicKey
-        );
-        const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, public_key: publicKey }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Personal preview gagal");
-        }
-
-        const plaintext = await decryptEncryptedResponse(response, keyPair);
+        const payload = await fetchPreviewBytes(filename, userId, keyPair);
         if (cancelled) return;
 
-        const blob = new Blob([plaintext], { type: "image/jpeg" });
+        const blob = new Blob([payload.bytes], { type: "image/jpeg" });
         objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
+        setPreview({ ...payload, src: objectUrl });
       } catch (error) {
         console.error("Preview gagal:", error);
-        if (!cancelled) setSrc(null);
+        if (!cancelled) setPreview(null);
       } finally {
         releasePreviewSlot?.();
       }
@@ -218,9 +287,45 @@ function usePersonalPreview(
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [filename, userId]);
+  }, [enabled, filename, userId]);
 
-  return src;
+  return preview;
+}
+
+function FaceBoxesOverlay({
+  preview,
+  preserveAspectRatio,
+}: {
+  preview: PreviewAsset;
+  preserveAspectRatio: "xMidYMid slice" | "xMidYMid meet";
+}) {
+  if (!preview.width || !preview.height || preview.matchedFaces.length === 0) return null;
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox={`0 0 ${preview.width} ${preview.height}`}
+      preserveAspectRatio={preserveAspectRatio}
+      className="pointer-events-none absolute inset-0 h-full w-full"
+    >
+      {preview.matchedFaces.map((box, index) => {
+        const [x1, y1, x2, y2] = box;
+        return (
+          <rect
+            key={`${index}-${x1}-${y1}`}
+            x={x1}
+            y={y1}
+            width={Math.max(0, x2 - x1)}
+            height={Math.max(0, y2 - y1)}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth={Math.max(4, Math.min(preview.width!, preview.height!) * 0.004)}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+    </svg>
+  );
 }
 
 function PersonalPreviewImage({
@@ -232,14 +337,20 @@ function PersonalPreviewImage({
   userId: string | null;
   className: string;
 }) {
-  const src = usePersonalPreview(photo.filename, userId);
+  const preview = usePersonalPreview(photo.filename, userId);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const imageLoaded = preview !== null && loadedSrc === preview.src;
 
-  return src ? (
-    <img
-      src={src}
-      alt="Foto hasil pencarian"
-      className={className}
-    />
+  return preview ? (
+    <div className={`relative inline-block max-w-full max-h-full ${className}`}>
+      <img
+        src={preview.src}
+        alt="Foto hasil pencarian"
+        className={`block max-w-full max-h-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+        onLoad={() => setLoadedSrc(preview.src)}
+      />
+      <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid meet" />
+    </div>
   ) : (
     <div className={`${className} bg-slate-900 animate-pulse`} />
   );
@@ -252,20 +363,46 @@ function PhotoThumb({
   photo: Photo;
   userId: string | null;
 }) {
-  const src = usePersonalPreview(
-    photo.filename,
-    userId
-  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const preview = usePersonalPreview(photo.filename, userId, shouldLoad);
+  const imageLoaded = preview !== null && loadedSrc === preview.src;
 
-  return src ? (
-    <img
-      src={src}
-      alt="Foto hasil pencarian"
-      loading="lazy"
-      className="w-full h-full object-cover"
-    />
-  ) : (
-    <div className="w-full h-full bg-slate-900 animate-pulse" />
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (!("IntersectionObserver" in window)) {
+      setShouldLoad(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setShouldLoad(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "300px 0px" });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-900">
+      {preview && (
+        <img
+          src={preview.src}
+          alt="Foto hasil pencarian"
+          loading="lazy"
+          className={`w-full h-full object-cover transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+          onLoad={() => setLoadedSrc(preview.src)}
+        />
+      )}
+      {preview && <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid slice" />}
+      {!imageLoaded && <div className="absolute inset-0 bg-slate-900 animate-pulse" />}
+    </div>
   );
 }
 
@@ -377,7 +514,7 @@ const EventPublicBayanRun2026 = () => {
       setVerifying(false);
       setStatusMsg({
         type: "error",
-        text: "Modul verifikasi wajah gagal dimuat. Pastikan server lokal (localhost:5050) sedang berjalan.",
+        text: "Modul verifikasi wajah gagal dimuat. Periksa koneksi internet lalu coba lagi.",
       });
       return;
     }
