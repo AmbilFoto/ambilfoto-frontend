@@ -738,7 +738,7 @@ const EventPublicBayanRun2026 = () => {
       <section className="relative overflow-hidden pt-16 pb-14 md:pt-20 md:pb-16">
         <div className="absolute inset-0 bg-slate-800">
           <img
-            src="https://ik.imagekit.io/nwtwwkdgu/20251012053734%20-%20BOM_6641.jpg"
+            src="https://res.cloudinary.com/ddeigqz5d/image/upload/v1790630070/20251012053734_-_BOM_6641_nxp5w0.jpg"
             alt=""
             className="w-full h-full object-cover"
             onError={(e) => {

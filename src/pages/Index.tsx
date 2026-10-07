@@ -667,7 +667,7 @@ const Index = () => {
             </div>
             <div className="event-card-anim">
               <EventCard
-                logos={["https://ik.imagekit.io/nwtwwkdgu/LOGO_BR2026_vbixvo.webp?updatedAt=1787729796492"]}
+                logos={["https://res.cloudinary.com/ddeigqz5d/image/upload/v1790630020/LOGO_BR2026_vbixvo_w7hjua.webp"]}
                 title="Bayan Run 2026"
                 subtitle="Fun Run"
                 href="/event-public/bayan-run-2026"
