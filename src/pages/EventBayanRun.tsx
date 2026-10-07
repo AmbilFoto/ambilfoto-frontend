@@ -13,8 +13,7 @@ const EVENT_DATE_LABEL = "10-11 Oktober 2026";
 const EVENT_START_DATE = "2026-10-10";
 const EVENT_TOTAL_DAYS = 1; // ganti kalau race day + expo dianggap multi-hari
 
-// ── Local backend (ganti ke domain production kalau sudah deploy) ──
-const API_BASE_URL = "https://engine-af.ambilfoto.id/";
+const API_BASE_URL = "https://engine-af.ambilfoto.id"; // tanpa trailing slash
 
 const BIOMETRIC_API_BASE =
   `${API_BASE_URL}/api/user/biometric`;
@@ -34,8 +33,16 @@ const DOWNLOAD_ENDPOINT =
 const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
   `${API_BASE_URL}/api/user/preview_match_encrypted_by_id/${encodeURIComponent(filename)}`;
 
+const PREVIEW_CACHE_KEY_ENDPOINT = (filename: string) =>
+  `${API_BASE_URL}/api/user/preview_cache_key_by_id/${encodeURIComponent(filename)}`;
+
 const STORAGE_KEY =
   `ambilfoto_user_id_${EVENT_SLUG}`;
+
+/* Margin observer: area di luar viewport yang masih dianggap "dekat".
+   Kecil = RAM lebih hemat di HP. */
+const THUMB_ROOT_MARGIN = "200px 0px";
+const MAX_CONCURRENT_PREVIEWS = 3;
 
 declare global {
   interface Window {
@@ -70,6 +77,30 @@ interface Photo {
   metadata?: PhotoMeta;
 }
 
+interface PreviewAsset {
+  src: string;
+  matchedFaces: number[][];
+  width: number | null;
+  height: number | null;
+}
+
+interface PreviewPayload {
+  bytes: ArrayBuffer;
+  matchedFaces: number[][];
+  width: number | null;
+  height: number | null;
+}
+
+/* Metadata ringan (bukan bytes gambar) agar re-load setelah revoke cepat */
+interface PreviewMeta {
+  url: string;
+  wrappedDek: string;
+  fileNonce: string;
+  matchedFaces: number[][];
+  width: number | null;
+  height: number | null;
+}
+
 function computeDayLabel(dateStr?: string): string {
   if (!dateStr) return "";
   const start = new Date(`${EVENT_START_DATE}T00:00:00`);
@@ -84,9 +115,10 @@ function computeDayLabel(dateStr?: string): string {
 let deviceKeyPairPromise: Promise<CryptoKeyPair> | null = null;
 let activePreviewRequests = 0;
 const previewWaiters: Array<() => void> = [];
+const previewMetaCache = new Map<string, PreviewMeta>();
 
 async function acquirePreviewSlot(): Promise<() => void> {
-  if (activePreviewRequests < 3) {
+  if (activePreviewRequests < MAX_CONCURRENT_PREVIEWS) {
     activePreviewRequests += 1;
   } else {
     await new Promise<void>((resolve) => previewWaiters.push(resolve));
@@ -129,13 +161,22 @@ async function decryptEncryptedResponse(
   response: Response,
   keyPair: CryptoKeyPair
 ): Promise<ArrayBuffer> {
-  const ciphertext = await response.arrayBuffer();
-  const wrappedDek = base64ToArrayBuffer(
-    response.headers.get("X-Wrapped-DEK") || ""
+  return decryptPreviewCiphertext(
+    await response.arrayBuffer(),
+    response.headers.get("X-Wrapped-DEK") || "",
+    response.headers.get("X-Encrypted-File-Nonce") || "",
+    keyPair
   );
-  const fileNonce = base64ToArrayBuffer(
-    response.headers.get("X-Encrypted-File-Nonce") || ""
-  );
+}
+
+async function decryptPreviewCiphertext(
+  ciphertext: ArrayBuffer,
+  wrappedDekValue: string,
+  fileNonceValue: string,
+  keyPair: CryptoKeyPair
+): Promise<ArrayBuffer> {
+  const wrappedDek = base64ToArrayBuffer(wrappedDekValue);
+  const fileNonce = base64ToArrayBuffer(fileNonceValue);
 
   if (!wrappedDek.byteLength || fileNonce.byteLength !== 12) {
     throw new Error("Metadata enkripsi tidak lengkap");
@@ -161,19 +202,113 @@ async function decryptEncryptedResponse(
   );
 }
 
+async function fetchPreviewViaMeta(
+  meta: PreviewMeta,
+  keyPair: CryptoKeyPair
+): Promise<PreviewPayload> {
+  const imageResponse = await fetch(meta.url, { cache: "force-cache" });
+  if (!imageResponse.ok) {
+    throw new Error(`CDN preview gagal (${imageResponse.status})`);
+  }
+  const bytes = await decryptPreviewCiphertext(
+    await imageResponse.arrayBuffer(),
+    meta.wrappedDek,
+    meta.fileNonce,
+    keyPair
+  );
+  return {
+    bytes,
+    matchedFaces: meta.matchedFaces,
+    width: meta.width,
+    height: meta.height,
+  };
+}
+
+async function fetchPreviewBytes(
+  filename: string,
+  userId: string,
+  keyPair: CryptoKeyPair
+): Promise<PreviewPayload> {
+  const cacheKey = `${userId}:${filename}`;
+
+  // Re-load setelah revoke: pakai metadata cache (tanpa POST ulang)
+  const cached = previewMetaCache.get(cacheKey);
+  if (cached) {
+    try {
+      return await fetchPreviewViaMeta(cached, keyPair);
+    } catch (error) {
+      // URL CDN mungkin kedaluwarsa -> buang cache, ulangi dari awal
+      previewMetaCache.delete(cacheKey);
+      console.warn("Preview meta cache tidak valid, meminta ulang:", error);
+    }
+  }
+
+  try {
+    const keyResponse = await fetch(PREVIEW_CACHE_KEY_ENDPOINT(filename), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        public_key: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
+      }),
+    });
+
+    if (keyResponse.ok) {
+      const keyData = await keyResponse.json();
+      const meta: PreviewMeta = {
+        url: keyData.url,
+        wrappedDek: keyData.wrapped_dek,
+        fileNonce: keyData.file_nonce,
+        matchedFaces: Array.isArray(keyData.matched_faces) ? keyData.matched_faces : [],
+        width: Number.isFinite(keyData.preview_width) ? keyData.preview_width : null,
+        height: Number.isFinite(keyData.preview_height) ? keyData.preview_height : null,
+      };
+      const payload = await fetchPreviewViaMeta(meta, keyPair);
+      previewMetaCache.set(cacheKey, meta);
+      return payload;
+    }
+  } catch (error) {
+    console.warn("Encrypted CDN preview tidak tersedia, memakai fallback:", error);
+  }
+
+  const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      public_key: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error("Personal preview gagal");
+  }
+  return {
+    bytes: await decryptEncryptedResponse(response, keyPair),
+    matchedFaces: [],
+    width: null,
+    height: null,
+  };
+}
+
+/**
+ * Saat `enabled` true  -> fetch + decrypt + buat blob URL.
+ * Saat `enabled` false / unmount -> blob URL di-revoke & state dikosongkan
+ * (gambar hilang dari RAM). Dipakai untuk lazy-load + lazy-unload.
+ */
 function usePersonalPreview(
   filename: string,
-  userId: string | null
+  userId: string | null,
+  enabled = true
 ) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewAsset | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
 
-    setSrc(null);
+    setPreview(null);
 
-    if (!userId) {
+    if (!userId || !enabled) {
       return;
     }
 
@@ -181,30 +316,28 @@ function usePersonalPreview(
       let releasePreviewSlot: (() => void) | null = null;
       try {
         releasePreviewSlot = await acquirePreviewSlot();
-        const keyPair = await getDeviceKeyPair();
-        const publicKey = await crypto.subtle.exportKey(
-          "jwk",
-          keyPair.publicKey
-        );
-        const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, public_key: publicKey }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Personal preview gagal");
-        }
-
-        const plaintext = await decryptEncryptedResponse(response, keyPair);
+        // Sudah keluar viewport saat antre -> batalkan sebelum fetch
         if (cancelled) return;
 
-        const blob = new Blob([plaintext], { type: "image/jpeg" });
+        const keyPair = await getDeviceKeyPair();
+        if (cancelled) return;
+
+        const payload = await fetchPreviewBytes(filename, userId as string, keyPair);
+        if (cancelled) return;
+
+        const blob = new Blob([payload.bytes], { type: "image/jpeg" });
         objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
+        setPreview({
+          src: objectUrl,
+          matchedFaces: payload.matchedFaces,
+          width: payload.width,
+          height: payload.height,
+        });
       } catch (error) {
-        console.error("Preview gagal:", error);
-        if (!cancelled) setSrc(null);
+        if (!cancelled) {
+          console.error("Preview gagal:", error);
+          setPreview(null);
+        }
       } finally {
         releasePreviewSlot?.();
       }
@@ -216,11 +349,48 @@ function usePersonalPreview(
       cancelled = true;
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
+        objectUrl = "";
       }
     };
-  }, [filename, userId]);
+  }, [enabled, filename, userId]);
 
-  return src;
+  return preview;
+}
+
+function FaceBoxesOverlay({
+  preview,
+  preserveAspectRatio,
+}: {
+  preview: PreviewAsset;
+  preserveAspectRatio: "xMidYMid slice" | "xMidYMid meet";
+}) {
+  if (!preview.width || !preview.height || preview.matchedFaces.length === 0) return null;
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox={`0 0 ${preview.width} ${preview.height}`}
+      preserveAspectRatio={preserveAspectRatio}
+      className="pointer-events-none absolute inset-0 h-full w-full"
+    >
+      {preview.matchedFaces.map((box, index) => {
+        const [x1, y1, x2, y2] = box;
+        return (
+          <rect
+            key={`${index}-${x1}-${y1}`}
+            x={x1}
+            y={y1}
+            width={Math.max(0, x2 - x1)}
+            height={Math.max(0, y2 - y1)}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth={Math.max(4, Math.min(preview.width!, preview.height!) * 0.004)}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+    </svg>
+  );
 }
 
 function PersonalPreviewImage({
@@ -232,14 +402,21 @@ function PersonalPreviewImage({
   userId: string | null;
   className: string;
 }) {
-  const src = usePersonalPreview(photo.filename, userId);
+  // Modal: otomatis revoke saat unmount (modal ditutup) atau ganti foto
+  const preview = usePersonalPreview(photo.filename, userId);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const imageLoaded = preview !== null && loadedSrc === preview.src;
 
-  return src ? (
-    <img
-      src={src}
-      alt="Foto hasil pencarian"
-      className={className}
-    />
+  return preview ? (
+    <div className={`relative inline-block max-w-full max-h-full ${className}`}>
+      <img
+        src={preview.src}
+        alt="Foto hasil pencarian"
+        className={`block max-w-full max-h-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+        onLoad={() => setLoadedSrc(preview.src)}
+      />
+      <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid meet" />
+    </div>
   ) : (
     <div className={`${className} bg-slate-900 animate-pulse`} />
   );
@@ -252,20 +429,45 @@ function PhotoThumb({
   photo: Photo;
   userId: string | null;
 }) {
-  const src = usePersonalPreview(
-    photo.filename,
-    userId
-  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const preview = usePersonalPreview(photo.filename, userId, inView);
+  const imageLoaded = preview !== null && loadedSrc === preview.src;
 
-  return src ? (
-    <img
-      src={src}
-      alt="Foto hasil pencarian"
-      loading="lazy"
-      className="w-full h-full object-cover"
-    />
-  ) : (
-    <div className="w-full h-full bg-slate-900 animate-pulse" />
+  // Lazy load saat masuk viewport, lazy UNLOAD (revoke) saat keluar viewport
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (!("IntersectionObserver" in window)) {
+      setInView(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: THUMB_ROOT_MARGIN }
+    );
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-900">
+      {preview && (
+        <img
+          src={preview.src}
+          alt="Foto hasil pencarian"
+          decoding="async"
+          className={`w-full h-full object-cover transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+          onLoad={() => setLoadedSrc(preview.src)}
+        />
+      )}
+      {preview && <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid slice" />}
+      {!imageLoaded && <div className="absolute inset-0 bg-slate-900 animate-pulse" />}
+    </div>
   );
 }
 
@@ -377,7 +579,7 @@ const EventPublicBayanRun2026 = () => {
       setVerifying(false);
       setStatusMsg({
         type: "error",
-        text: "Modul verifikasi wajah gagal dimuat. Pastikan server lokal (localhost:5050) sedang berjalan.",
+        text: "Modul verifikasi wajah gagal dimuat. Periksa koneksi internet lalu coba lagi.",
       });
       return;
     }
@@ -414,6 +616,7 @@ const EventPublicBayanRun2026 = () => {
   const resetFaceData = useCallback(() => {
     if (!window.confirm("Ulangi pencarian wajah? Data verifikasi yang tersimpan akan dihapus dari perangkat ini.")) return;
     localStorage.removeItem(STORAGE_KEY);
+    previewMetaCache.clear();
     setUserId(null);
     setAllPhotos([]);
     setCurrentDay("all");
@@ -423,78 +626,64 @@ const EventPublicBayanRun2026 = () => {
 
   /* ══ DOWNLOAD ══ */
   const downloadPhoto = useCallback(
-  async (photo: Photo) => {
-    if (!userId) {
-      showToast("Sesi wajah belum tersedia.");
-      return;
-    }
+    async (photo: Photo) => {
+      if (!userId) {
+        showToast("Sesi wajah belum tersedia.");
+        return;
+      }
 
-    if (!photo.photo_id) {
-      showToast("ID foto tidak tersedia.");
-      return;
-    }
+      if (!photo.photo_id) {
+        showToast("ID foto tidak tersedia.");
+        return;
+      }
 
-    setDownloadingKey(photo.filename);
-    showToast("Mempersiapkan unduhan…");
+      setDownloadingKey(photo.filename);
+      showToast("Mempersiapkan unduhan…");
 
-    try {
-      const keyPair = await getDeviceKeyPair();
-      const publicKey = await crypto.subtle.exportKey(
-        "jwk",
-        keyPair.publicKey
-      );
-      const response = await fetch(
-        DOWNLOAD_ENDPOINT,
-        {
+      try {
+        const keyPair = await getDeviceKeyPair();
+        const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+        const response = await fetch(DOWNLOAD_ENDPOINT, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user_id: userId,
             photo_id: photo.photo_id,
             public_key: publicKey,
           }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.error || `Download gagal (${response.status})`);
         }
-      );
 
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => null);
+        const plaintext = await decryptEncryptedResponse(response, keyPair);
+        const blob = new Blob([plaintext], { type: "image/jpeg" });
+        const blobUrl = URL.createObjectURL(blob);
 
-        throw new Error(
-          errorData?.error ||
-            `Download gagal (${response.status})`
-        );
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = photo.filename || "foto.jpg";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        window.setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 4000);
+
+        showToast("Download dimulai.");
+      } catch (error) {
+        console.error("Download error:", error);
+        showToast("Foto tidak dapat diunduh.");
+      } finally {
+        setDownloadingKey(null);
       }
-
-      const plaintext = await decryptEncryptedResponse(response, keyPair);
-      const blob = new Blob([plaintext], { type: "image/jpeg" });
-      const blobUrl = URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = photo.filename || "foto.jpg";
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.setTimeout(() => {
-        URL.revokeObjectURL(blobUrl);
-      }, 4000);
-
-      showToast("Download dimulai.");
-    } catch (error) {
-      console.error("Download error:", error);
-      showToast("Foto tidak dapat diunduh.");
-    } finally {
-      setDownloadingKey(null);
-    }
-  },
-  [userId, showToast]
-);
+    },
+    [userId, showToast]
+  );
 
   /* ══ MODAL NAV ══ */
   const navigatePhoto = useCallback((direction: number) => {
@@ -514,6 +703,13 @@ const EventPublicBayanRun2026 = () => {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [modalIndex, navigatePhoto]);
+
+  /* Cleanup timer toast saat unmount */
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
 
   /* ══════════════════════════ RENDER ═══════════════════════════ */
@@ -542,7 +738,7 @@ const EventPublicBayanRun2026 = () => {
       <section className="relative overflow-hidden pt-16 pb-14 md:pt-20 md:pb-16">
         <div className="absolute inset-0 bg-slate-800">
           <img
-            src="https://ik.imagekit.io/nwtwwkdgu/20251012053734%20-%20BOM_6641.jpg"
+            src="https://res.cloudinary.com/ddeigqz5d/image/upload/v1790630070/20251012053734_-_BOM_6641_nxp5w0.jpg"
             alt=""
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -770,8 +966,7 @@ const EventPublicBayanRun2026 = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const p = visiblePhotos[modalIndex];
-              downloadPhoto(p);
+              downloadPhoto(visiblePhotos[modalIndex]);
             }}
             disabled={downloadingKey === visiblePhotos[modalIndex].filename}
             className="absolute right-7 bottom-4 text-white/70 hover:text-white transition-colors disabled:opacity-50"
