@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import {
@@ -9,9 +9,19 @@ import {
 const EVENT_SLUG = "bayan-run-2026";
 const EVENT_NAME = "Bayan Run 2026";
 const EVENT_LOCATION = "Balikpapan, Kalimantan Timur";
-const EVENT_DATE_LABEL = "10-11 Oktober 2026";
-const EVENT_START_DATE = "2026-10-10";
-const EVENT_TOTAL_DAYS = 1; // ganti kalau race day + expo dianggap multi-hari
+const EVENT_DATE_LABEL = "9-11 Oktober 2026";
+
+/* Zona waktu sumber metadata (Balikpapan = WITA, UTC+8). Dipakai untuk
+   timestamp tanpa zona dan konversi timestamp ber-zona ke tanggal kalender. */
+const EVENT_TZ = "Asia/Makassar";
+const EVENT_TZ_OFFSET = "+08:00";
+
+/* Urutan tombol filter: terbaru dulu. */
+const EVENT_DAYS = [
+  { key: "2026-10-11", label: "11 Okt" },
+  { key: "2026-10-10", label: "10 Okt" },
+  { key: "2026-10-09", label: "9 Okt" },
+] as const;
 
 const API_BASE_URL = "https://engine-af.ambilfoto.id"; // tanpa trailing slash
 
@@ -44,6 +54,10 @@ const STORAGE_KEY =
 const THUMB_ROOT_MARGIN = "200px 0px";
 const MAX_CONCURRENT_PREVIEWS = 3;
 
+/* Buka halaman dengan ?debugFaces=1 untuk melihat sumber preview & jumlah kotak per foto. */
+const DEBUG_FACES =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debugFaces");
+
 declare global {
   interface Window {
     AmbilFotoScan: {
@@ -65,7 +79,8 @@ interface PhotoMeta {
   event_name?: string;
   location?: string;
   photographer?: string;
-  day?: string;
+  day?: string;      // label hari event, mis. "10 Okt" (kosong kalau di luar 9-11 Okt)
+  dateKey?: string;  // tanggal kalender "YYYY-MM-DD" hasil normalisasi, kosong kalau tidak valid
 }
 
 interface Photo {
@@ -79,6 +94,7 @@ interface Photo {
 
 interface PreviewAsset {
   src: string;
+  source: "cdn" | "fallback";
   matchedFaces: number[][];
   width: number | null;
   height: number | null;
@@ -86,6 +102,7 @@ interface PreviewAsset {
 
 interface PreviewPayload {
   bytes: ArrayBuffer;
+  source: "cdn" | "fallback";
   matchedFaces: number[][];
   width: number | null;
   height: number | null;
@@ -101,15 +118,66 @@ interface PreviewMeta {
   height: number | null;
 }
 
-function computeDayLabel(dateStr?: string): string {
-  if (!dateStr) return "";
-  const start = new Date(`${EVENT_START_DATE}T00:00:00`);
-  const photoDate = new Date(dateStr);
-  if (isNaN(photoDate.getTime())) return "";
-  const diffDays = Math.floor((photoDate.getTime() - start.getTime()) / 86400000);
-  const dayNum = diffDays + 1;
-  if (dayNum < 1 || dayNum > EVENT_TOTAL_DAYS) return "";
-  return `Day ${dayNum}`;
+/* ═══════════════ TANGGAL: normalisasi, label, sorting ═══════════════ */
+
+const HAS_ZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/i;
+const DATE_ONLY_RE = /^(\d{4}-\d{2}-\d{2})$/;
+const NAIVE_DATETIME_RE = /^(\d{4}-\d{2}-\d{2})[T ]/;
+
+const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: EVENT_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}); // en-CA -> YYYY-MM-DD
+
+/**
+ * Tanggal kalender (YYYY-MM-DD) dari metadata.date, atau null kalau tidak valid.
+ * - "2026-10-11" / "2026-10-11T08:00:00" (tanpa zona): tanggal diambil apa adanya.
+ * - Timestamp dengan Z / offset: dikonversi ke zona event (WITA), bukan UTC.
+ */
+function getPhotoDateKey(value?: string): string | null {
+  if (!value) return null;
+  const s = String(value).trim();
+
+  const dateOnly = s.match(DATE_ONLY_RE);
+  if (dateOnly) return dateOnly[1];
+
+  const naive = s.match(NAIVE_DATETIME_RE);
+  if (naive && !HAS_ZONE_RE.test(s)) return naive[1];
+
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return dateKeyFormatter.format(parsed);
+}
+
+/** Epoch ms untuk sorting; NaN kalau tidak valid. Tanpa zona dianggap WITA. */
+function getPhotoSortTime(value?: string): number {
+  if (!value) return NaN;
+  const s = String(value).trim();
+  if (DATE_ONLY_RE.test(s)) return Date.parse(`${s}T00:00:00${EVENT_TZ_OFFSET}`);
+  const iso = s.replace(" ", "T");
+  return Date.parse(HAS_ZONE_RE.test(iso) ? iso : `${iso}${EVENT_TZ_OFFSET}`);
+}
+
+/** Label hari event ("9 Okt" / "10 Okt" / "11 Okt"), atau "" kalau di luar 9-11 Okt. */
+function getDayLabel(dateKey: string | null): string {
+  return EVENT_DAYS.find((d) => d.key === dateKey)?.label ?? "";
+}
+
+/** Terbaru -> terlama. Tanggal tidak valid di paling akhir. Urutan awal dipertahankan (stabil). */
+function sortPhotosByDate(photos: Photo[]): Photo[] {
+  return photos
+    .map((photo, index) => ({ photo, index, t: getPhotoSortTime(photo.metadata?.date) }))
+    .sort((a, b) => {
+      const validA = Number.isFinite(a.t);
+      const validB = Number.isFinite(b.t);
+      if (!validA && !validB) return a.index - b.index;
+      if (!validA) return 1;
+      if (!validB) return -1;
+      return b.t - a.t || a.index - b.index;
+    })
+    .map((x) => x.photo);
 }
 
 let deviceKeyPairPromise: Promise<CryptoKeyPair> | null = null;
@@ -218,6 +286,7 @@ async function fetchPreviewViaMeta(
   );
   return {
     bytes,
+    source: "cdn",
     matchedFaces: meta.matchedFaces,
     width: meta.width,
     height: meta.height,
@@ -284,6 +353,7 @@ async function fetchPreviewBytes(
   }
   return {
     bytes: await decryptEncryptedResponse(response, keyPair),
+    source: "fallback",
     matchedFaces: [],
     width: null,
     height: null,
@@ -329,6 +399,7 @@ function usePersonalPreview(
         objectUrl = URL.createObjectURL(blob);
         setPreview({
           src: objectUrl,
+          source: payload.source,
           matchedFaces: payload.matchedFaces,
           width: payload.width,
           height: payload.height,
@@ -360,9 +431,11 @@ function usePersonalPreview(
 function FaceBoxesOverlay({
   preview,
   preserveAspectRatio,
+  strokePx = 1.5,
 }: {
   preview: PreviewAsset;
   preserveAspectRatio: "xMidYMid slice" | "xMidYMid meet";
+  strokePx?: number;
 }) {
   if (!preview.width || !preview.height || preview.matchedFaces.length === 0) return null;
 
@@ -384,7 +457,7 @@ function FaceBoxesOverlay({
             height={Math.max(0, y2 - y1)}
             fill="none"
             stroke="#10b981"
-            strokeWidth={Math.max(4, Math.min(preview.width!, preview.height!) * 0.004)}
+            strokeWidth={strokePx}
             vectorEffect="non-scaling-stroke"
           />
         );
@@ -415,7 +488,7 @@ function PersonalPreviewImage({
         className={`block max-w-full max-h-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
         onLoad={() => setLoadedSrc(preview.src)}
       />
-      <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid meet" />
+      <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid meet" strokePx={2.5} />
     </div>
   ) : (
     <div className={`${className} bg-slate-900 animate-pulse`} />
@@ -465,7 +538,16 @@ function PhotoThumb({
           onLoad={() => setLoadedSrc(preview.src)}
         />
       )}
-      {preview && <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid slice" />}
+      {preview && <FaceBoxesOverlay preview={preview} preserveAspectRatio="xMidYMid slice" strokePx={1.5} />}
+      {DEBUG_FACES && preview && (
+        <div
+          className={`absolute bottom-8 left-2 z-10 rounded px-1.5 py-0.5 text-[9px] font-mono text-white ${
+            preview.matchedFaces.length > 0 && preview.width && preview.height ? "bg-emerald-600" : "bg-red-600"
+          }`}
+        >
+          {preview.source} · {preview.matchedFaces.length} box · {preview.width ?? "?"}x{preview.height ?? "?"}
+        </div>
+      )}
       {!imageLoaded && <div className="absolute inset-0 bg-slate-900 animate-pulse" />}
     </div>
   );
@@ -492,7 +574,7 @@ const EventPublicBayanRun2026 = () => {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [allPhotos, setAllPhotos] = useState<Photo[]>([]);
-  const [currentDay, setCurrentDay] = useState("all");
+  const [currentDay, setCurrentDay] = useState<string>("all"); // "all" | "YYYY-MM-DD"
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [gallerySearched, setGallerySearched] = useState(false);
 
@@ -503,7 +585,29 @@ const EventPublicBayanRun2026 = () => {
   const scanSessionRef = useRef<{ close: () => void } | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  const visiblePhotos = currentDay === "all" ? allPhotos : allPhotos.filter((p) => p.metadata?.day === currentDay);
+  /* allPhotos sudah terurut (terbaru -> terlama) saat disimpan; filter tidak mengubah sumber. */
+  const visiblePhotos = useMemo(
+    () =>
+      currentDay === "all"
+        ? allPhotos
+        : allPhotos.filter((p) => p.metadata?.dateKey === currentDay),
+    [allPhotos, currentDay]
+  );
+
+  const dayCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allPhotos.length };
+    for (const day of EVENT_DAYS) counts[day.key] = 0;
+    for (const photo of allPhotos) {
+      const key = photo.metadata?.dateKey;
+      if (key && key in counts) counts[key] += 1;
+    }
+    return counts;
+  }, [allPhotos]);
+
+  const selectDay = useCallback((key: string) => {
+    setCurrentDay(key);
+    setModalIndex(null);
+  }, []);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -523,11 +627,19 @@ const EventPublicBayanRun2026 = () => {
       });
       const data = await res.json();
       if (data.success && data.photos?.length > 0) {
-        const photos: Photo[] = data.photos.map((p: Photo) => ({
-          ...p,
-          metadata: { ...(p.metadata || {}), day: computeDayLabel(p.metadata?.date) },
-        }));
-        setAllPhotos(photos);
+        const photos: Photo[] = (data.photos as Photo[]).map((p) => {
+          const dateKey = getPhotoDateKey(p.metadata?.date);
+          return {
+            ...p,
+            metadata: {
+              ...(p.metadata || {}),
+              dateKey: dateKey ?? undefined,
+              day: getDayLabel(dateKey),
+            },
+          };
+        });
+        setAllPhotos(sortPhotosByDate(photos));
+        setCurrentDay("all");
       } else {
         setAllPhotos([]);
       }
@@ -620,6 +732,7 @@ const EventPublicBayanRun2026 = () => {
     setUserId(null);
     setAllPhotos([]);
     setCurrentDay("all");
+    setModalIndex(null);
     setGallerySearched(false);
     setStatusMsg(null);
   }, []);
@@ -838,21 +951,26 @@ const EventPublicBayanRun2026 = () => {
               </div>
             </div>
 
-            {allPhotos.length > 0 && EVENT_TOTAL_DAYS > 1 && (
-              <div className="flex gap-2 flex-wrap mb-8">
-                {["all", ...Array.from({ length: EVENT_TOTAL_DAYS }, (_, i) => `Day ${i + 1}`)].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setCurrentDay(d)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide transition-all ${
-                      currentDay === d
-                        ? "btn-primary text-white"
-                        : "bg-white border border-slate-200 text-slate-500 hover:border-blue-200 hover:text-blue-600"
-                    }`}
-                  >
-                    {d === "all" ? "Semua Hari" : d}
-                  </button>
-                ))}
+            {allPhotos.length > 0 && (
+              <div className="mb-8">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
+                  Filter Tanggal Foto
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {[{ key: "all", label: "Semua Hari" }, ...EVENT_DAYS].map((d) => (
+                    <button
+                      key={d.key}
+                      onClick={() => selectDay(d.key)}
+                      className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wide transition-all ${
+                        currentDay === d.key
+                          ? "btn-primary text-white"
+                          : "bg-white border border-slate-200 text-slate-500 hover:border-blue-200 hover:text-blue-600"
+                      }`}
+                    >
+                      {d.label} ({dayCounts[d.key] ?? 0})
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -866,11 +984,22 @@ const EventPublicBayanRun2026 = () => {
             {!loadingPhotos && visiblePhotos.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
                 <ImageOff className="w-11 h-11 text-slate-200" />
-                <p className="font-bold text-slate-800">Belum Ada Foto Ditemukan</p>
-                <p className="text-sm text-slate-400 max-w-sm">
-                  Wajah Anda belum terdeteksi. Coba cek kembali nanti setelah panitia mengunggah lebih
-                  banyak foto.
-                </p>
+                {allPhotos.length > 0 ? (
+                  <>
+                    <p className="font-bold text-slate-800">Tidak Ada Foto di Hari Ini</p>
+                    <p className="text-sm text-slate-400 max-w-sm">
+                      Coba pilih tanggal lain atau kembali ke Semua Hari.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-slate-800">Belum Ada Foto Ditemukan</p>
+                    <p className="text-sm text-slate-400 max-w-sm">
+                      Wajah Anda belum terdeteksi. Coba cek kembali nanti setelah panitia mengunggah lebih
+                      banyak foto.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
