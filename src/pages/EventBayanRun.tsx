@@ -49,10 +49,13 @@ const PREVIEW_CACHE_KEY_ENDPOINT = (filename: string) =>
 const STORAGE_KEY =
   `ambilfoto_user_id_${EVENT_SLUG}`;
 
-/* Margin observer: area di luar viewport yang masih dianggap "dekat".
-   Kecil = RAM lebih hemat di HP. */
+/* Margin observer: area di luar viewport yang masih dianggap "dekat". */
 const THUMB_ROOT_MARGIN = "200px 0px";
 const MAX_CONCURRENT_PREVIEWS = 3;
+
+/* Batas blob URL yang disimpan di memori (LRU). ~150 x 200KB = ~30MB.
+   Blob yang sedang tampil (refs > 0) tidak pernah di-revoke. */
+const MAX_CACHED_PREVIEWS = 150;
 
 /* Buka halaman dengan ?debugFaces=1 untuk melihat sumber preview & jumlah kotak per foto. */
 const DEBUG_FACES =
@@ -108,7 +111,7 @@ interface PreviewPayload {
   height: number | null;
 }
 
-/* Metadata ringan (bukan bytes gambar) agar re-load setelah revoke cepat */
+/* Metadata ringan (bukan bytes gambar) agar re-load cepat */
 interface PreviewMeta {
   url: string;
   wrappedDek: string;
@@ -300,7 +303,7 @@ async function fetchPreviewBytes(
 ): Promise<PreviewPayload> {
   const cacheKey = `${userId}:${filename}`;
 
-  // Re-load setelah revoke: pakai metadata cache (tanpa POST ulang)
+  // Pakai metadata cache (tanpa POST ulang)
   const cached = previewMetaCache.get(cacheKey);
   if (cached) {
     try {
@@ -360,10 +363,95 @@ async function fetchPreviewBytes(
   };
 }
 
+/* ═══════════════ CACHE BLOB URL GLOBAL (LRU) ═══════════════
+   - Thumb & modal berbagi cache yang sama -> modal terbuka instan.
+   - Blob TIDAK di-revoke saat keluar viewport / unmount, hanya saat
+     jumlah cache melebihi MAX_CACHED_PREVIEWS dan blob tidak sedang dipakai.
+   - Urutan insert di Map = urutan LRU (paling lama di depan). */
+
+interface CachedPreview {
+  asset: PreviewAsset;
+  refs: number; // jumlah komponen yang sedang memakai
+}
+
+interface InflightPreview {
+  promise: Promise<PreviewAsset>;
+  waiters: number; // komponen yang masih menunggu hasil
+}
+
+/* Sentinel: request dibatalkan di antrean karena tidak ada lagi yang menunggu */
+const PREVIEW_SKIPPED = new Error("preview skipped");
+
+const previewAssetCache = new Map<string, CachedPreview>();
+const previewInflight = new Map<string, InflightPreview>();
+
+function touchPreview(key: string, entry: CachedPreview) {
+  previewAssetCache.delete(key);
+  previewAssetCache.set(key, entry); // pindah ke ujung (paling baru)
+}
+
+function evictPreviews() {
+  if (previewAssetCache.size <= MAX_CACHED_PREVIEWS) return;
+  for (const [key, entry] of previewAssetCache) {
+    if (previewAssetCache.size <= MAX_CACHED_PREVIEWS) break;
+    if (entry.refs > 0) continue; // jangan revoke yang sedang tampil
+    URL.revokeObjectURL(entry.asset.src);
+    previewAssetCache.delete(key);
+  }
+}
+
+function clearPreviewAssets() {
+  for (const entry of previewAssetCache.values()) URL.revokeObjectURL(entry.asset.src);
+  previewAssetCache.clear();
+  previewInflight.clear();
+}
+
+/* Dedupe: thumb & modal yang minta foto sama berbagi satu fetch.
+   Kalau semua peminta sudah pergi sebelum dapat slot antrean, fetch dilewati. */
+function requestPreviewAsset(filename: string, userId: string): InflightPreview {
+  const key = `${userId}:${filename}`;
+
+  const existing = previewInflight.get(key);
+  if (existing) {
+    existing.waiters += 1;
+    return existing;
+  }
+
+  const inflight: InflightPreview = {
+    waiters: 1,
+    promise: null as unknown as Promise<PreviewAsset>,
+  };
+
+  inflight.promise = (async () => {
+    const release = await acquirePreviewSlot();
+    try {
+      if (inflight.waiters <= 0) throw PREVIEW_SKIPPED;
+
+      const keyPair = await getDeviceKeyPair();
+      const payload = await fetchPreviewBytes(filename, userId, keyPair);
+      const src = URL.createObjectURL(new Blob([payload.bytes], { type: "image/jpeg" }));
+      return {
+        src,
+        source: payload.source,
+        matchedFaces: payload.matchedFaces,
+        width: payload.width,
+        height: payload.height,
+      } as PreviewAsset;
+    } finally {
+      release();
+    }
+  })().finally(() => {
+    if (previewInflight.get(key) === inflight) previewInflight.delete(key);
+  });
+
+  previewInflight.set(key, inflight);
+  return inflight;
+}
+
 /**
- * Saat `enabled` true  -> fetch + decrypt + buat blob URL.
- * Saat `enabled` false / unmount -> blob URL di-revoke & state dikosongkan
- * (gambar hilang dari RAM). Dipakai untuk lazy-load + lazy-unload.
+ * Saat `enabled` true  -> ambil dari cache (instan) atau fetch + decrypt + simpan ke cache.
+ * Saat `enabled` false / unmount -> hanya melepas referensi; blob tetap di cache
+ * sampai kena eviction LRU atau resetFaceData.
  */
 function usePersonalPreview(
   filename: string,
@@ -373,55 +461,56 @@ function usePersonalPreview(
   const [preview, setPreview] = useState<PreviewAsset | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    let objectUrl = "";
-
-    setPreview(null);
-
+    // Tidak aktif / keluar viewport: kosongkan state (bebaskan decode gambar di DOM),
+    // tapi blob tetap di cache -> kembali ke viewport langsung muncul.
     if (!userId || !enabled) {
+      setPreview(null);
       return;
     }
 
-    async function loadPreview() {
-      let releasePreviewSlot: (() => void) | null = null;
-      try {
-        releasePreviewSlot = await acquirePreviewSlot();
-        // Sudah keluar viewport saat antre -> batalkan sebelum fetch
-        if (cancelled) return;
+    const key = `${userId}:${filename}`;
+    let cancelled = false;
+    let held: CachedPreview | null = null;
+    let inflight: InflightPreview | null = null;
+    let settled = false;
 
-        const keyPair = await getDeviceKeyPair();
-        if (cancelled) return;
+    const hold = (entry: CachedPreview) => {
+      entry.refs += 1;
+      held = entry;
+      touchPreview(key, entry);
+      setPreview(entry.asset);
+    };
 
-        const payload = await fetchPreviewBytes(filename, userId as string, keyPair);
-        if (cancelled) return;
-
-        const blob = new Blob([payload.bytes], { type: "image/jpeg" });
-        objectUrl = URL.createObjectURL(blob);
-        setPreview({
-          src: objectUrl,
-          source: payload.source,
-          matchedFaces: payload.matchedFaces,
-          width: payload.width,
-          height: payload.height,
-        });
-      } catch (error) {
-        if (!cancelled) {
+    const cached = previewAssetCache.get(key);
+    if (cached) {
+      hold(cached); // instan, tanpa loading
+    } else {
+      setPreview(null);
+      inflight = requestPreviewAsset(filename, userId);
+      inflight.promise
+        .then((asset) => {
+          settled = true;
+          let entry = previewAssetCache.get(key);
+          if (!entry) {
+            entry = { asset, refs: 0 };
+            previewAssetCache.set(key, entry);
+          }
+          if (!cancelled) hold(entry);
+          evictPreviews();
+        })
+        .catch((error) => {
+          settled = true;
+          if (error === PREVIEW_SKIPPED || cancelled) return;
           console.error("Preview gagal:", error);
           setPreview(null);
-        }
-      } finally {
-        releasePreviewSlot?.();
-      }
+        });
     }
-
-    loadPreview();
 
     return () => {
       cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-        objectUrl = "";
-      }
+      if (held) held.refs = Math.max(0, held.refs - 1);
+      if (inflight && !settled) inflight.waiters = Math.max(0, inflight.waiters - 1);
+      evictPreviews();
     };
   }, [enabled, filename, userId]);
 
@@ -475,7 +564,7 @@ function PersonalPreviewImage({
   userId: string | null;
   className: string;
 }) {
-  // Modal: otomatis revoke saat unmount (modal ditutup) atau ganti foto
+  // Modal: pakai cache bersama dengan thumb (instan kalau thumb sudah ter-load)
   const preview = usePersonalPreview(photo.filename, userId);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const imageLoaded = preview !== null && loadedSrc === preview.src;
@@ -508,7 +597,8 @@ function PhotoThumb({
   const preview = usePersonalPreview(photo.filename, userId, inView);
   const imageLoaded = preview !== null && loadedSrc === preview.src;
 
-  // Lazy load saat masuk viewport, lazy UNLOAD (revoke) saat keluar viewport
+  // Lazy load saat masuk viewport. Keluar viewport hanya melepas referensi,
+  // blob tetap di cache global (lihat usePersonalPreview).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -729,12 +819,20 @@ const EventPublicBayanRun2026 = () => {
     if (!window.confirm("Ulangi pencarian wajah? Data verifikasi yang tersimpan akan dihapus dari perangkat ini.")) return;
     localStorage.removeItem(STORAGE_KEY);
     previewMetaCache.clear();
+    clearPreviewAssets();
     setUserId(null);
     setAllPhotos([]);
     setCurrentDay("all");
     setModalIndex(null);
     setGallerySearched(false);
     setStatusMsg(null);
+  }, []);
+
+  /* Bersihkan semua blob saat halaman ditinggalkan (unmount) */
+  useEffect(() => {
+    return () => {
+      clearPreviewAssets();
+    };
   }, []);
 
   /* ══ DOWNLOAD ══ */
