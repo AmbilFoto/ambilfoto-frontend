@@ -10,8 +10,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MapPin, Loader2 } from "lucide-react";
 import axios from "axios";
+import { API_BASE_URL } from "@/services/api/api.config";
 
-const API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3000/api';
+const API_URL = API_BASE_URL;
 
 interface Province {
   id: string;

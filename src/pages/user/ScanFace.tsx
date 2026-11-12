@@ -34,7 +34,7 @@ const ScanFace = () => {
       }
       
       console.log('✅ Wajah terdeteksi, panjang embedding:', faceResult.embedding.length);
-      console.log('📤 Langkah 2: Mencocokkan foto melalui API Node.js...');
+      console.log('📤 Langkah 2: Mencocokkan foto melalui layanan User dan AI...');
       
       // Kirim embedding untuk pencocokan
       const matchResult = await userService.matchPhotos({

@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/api';
+const AUTH_API_URL = API_BASE_URL;
 
 const adminApi = axios.create({
   baseURL: `${AUTH_API_URL}/admin`,
@@ -33,7 +34,7 @@ adminApi.interceptors.response.use(
 
 // Types
 export interface DashboardStats {
-  users: {
+  users?: {
     total_users: number;
     regular_users: number;
     photographers: number;
@@ -47,7 +48,7 @@ export interface DashboardStats {
     active_last_week: number;
     active_last_month: number;
   };
-  events: {
+  events?: {
     total_events: number;
     active_events: number;
     completed_events: number;
@@ -57,7 +58,7 @@ export interface DashboardStats {
     private_events: number;
     avg_photos_per_event: number;
   };
-  photos: {
+  photos?: {
     total_photos: number;
     total_faces_detected: number;
     avg_faces_per_photo: number;
@@ -66,7 +67,7 @@ export interface DashboardStats {
     today_uploads: number;
     week_uploads: number;
   };
-  matches: {
+  matches?: {
     total_matches: number;
     unique_users_matched: number;
     photos_with_matches: number;
@@ -83,7 +84,7 @@ export interface DashboardStats {
     today_downloads: number;
     today_revenue: number;
   };
-  api_keys: {
+  api_keys?: {
     total_api_keys: number;
     active_keys: number;
     expired_keys: number;
@@ -93,20 +94,20 @@ export interface DashboardStats {
     total_tokens_used: number;
     keys_last_month: number;
   };
-  tokens: {
+  tokens?: {
     total_transactions: number;
     total_revenue: number;
     purchases: number;
     renewals: number;
     today_revenue: number;
   };
-  system_health: {
-    database: string;
-    ai_server: string;
+  system_health?: {
+    database?: string;
+    ai_server?: string;
     ai_details?: any;
     ai_error?: string;
   };
-  recent_activity: Array<{ action: string; count: number }>;
+  recent_activity?: Array<{ action: string; count: number }>;
   timestamp: string;
 }
 

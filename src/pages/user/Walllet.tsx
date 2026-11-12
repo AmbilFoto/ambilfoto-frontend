@@ -385,7 +385,7 @@ const UserWalletPage = () => {
                       <div key={photo.id} className="flex items-center gap-4 p-4 rounded-lg border">
                         <div className="w-20 h-20 bg-muted rounded-lg overflow-hidden">
                           <img 
-                            src={`${import.meta.env.VITE_AI_API_URL}/preview/${photo.ai_photo_id}`}
+                            src={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/photos/${photo.ai_photo_id}`}
                             alt={photo.filename}
                             className="w-full h-full object-cover"
                           />

@@ -19,7 +19,7 @@ import { Header } from '@/components/layout/Header';
 // Revenue data interface matching the API response
 interface RevenueData {
   period: string;
-  summary: {
+  summary?: {
     total_platform_revenue: string;
     total_transactions: number;
     avg_transaction: number;
@@ -30,10 +30,10 @@ interface RevenueData {
     photographer_earnings_total: number;
     unique_buyers: number;
   };
-  revenue_sources: {
-    point_topup: { amount: string; percentage: string };
-    photo_platform_fee: { amount: number; percentage: string };
-    api_token: { amount: number; percentage: string };
+  revenue_sources?: {
+    point_topup?: { amount: string; percentage: string };
+    photo_platform_fee?: { amount: number; percentage: string };
+    api_token?: { amount: number; percentage: string };
   };
 }
 
@@ -129,8 +129,8 @@ const AdminDashboard = () => {
               <Database className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Badge variant={stats?.system_health.database === 'OK' ? 'default' : 'destructive'}>
-                {stats?.system_health.database === 'OK' ? (
+              <Badge variant={stats?.system_health?.database === 'OK' ? 'default' : 'destructive'}>
+                {stats?.system_health?.database === 'OK' ? (
                   <><CheckCircle className="w-3 h-3 mr-1" /> Terhubung</>
                 ) : (
                   <><AlertCircle className="w-3 h-3 mr-1" /> Error</>
@@ -144,11 +144,11 @@ const AdminDashboard = () => {
               <Server className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Badge variant={stats?.system_health.ai_server === 'OK' ? 'default' : 'destructive'}>
-                {stats?.system_health.ai_server === 'OK' ? (
+              <Badge variant={stats?.system_health?.ai_server === 'OK' ? 'default' : 'destructive'}>
+                {stats?.system_health?.ai_server === 'OK' ? (
                   <><CheckCircle className="w-3 h-3 mr-1" /> Terhubung</>
                 ) : (
-                  <><AlertCircle className="w-3 h-3 mr-1" /> {stats?.system_health.ai_server}</>
+                  <><AlertCircle className="w-3 h-3 mr-1" /> {stats?.system_health?.ai_server || 'Tidak tersedia'}</>
                 )}
               </Badge>
             </CardContent>
@@ -163,13 +163,13 @@ const AdminDashboard = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(stats?.users.total_users || 0)}</div>
+              <div className="text-2xl font-bold">{formatNumber(stats?.users?.total_users || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                +{stats?.users.today_registrations || 0} hari ini
+                +{stats?.users?.today_registrations || 0} hari ini
               </p>
               <div className="mt-2 flex gap-2 text-xs">
-                <Badge variant="outline">{stats?.users.regular_users} Pengguna</Badge>
-                <Badge variant="outline">{stats?.users.photographers} Fotografer</Badge>
+                <Badge variant="outline">{stats?.users?.regular_users || 0} Pengguna</Badge>
+                <Badge variant="outline">{stats?.users?.photographers || 0} Fotografer</Badge>
               </div>
             </CardContent>
           </Card>
@@ -180,13 +180,13 @@ const AdminDashboard = () => {
               <Camera className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(stats?.events.total_events || 0)}</div>
+              <div className="text-2xl font-bold">{formatNumber(stats?.events?.total_events || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.events.active_events || 0} aktif
+                {stats?.events?.active_events || 0} aktif
               </p>
               <div className="mt-2 flex gap-2 text-xs">
-                <Badge variant="outline">{stats?.events.public_events} Publik</Badge>
-                <Badge variant="outline">{stats?.events.private_events} Privat</Badge>
+                <Badge variant="outline">{stats?.events?.public_events || 0} Publik</Badge>
+                <Badge variant="outline">{stats?.events?.private_events || 0} Privat</Badge>
               </div>
             </CardContent>
           </Card>
@@ -197,12 +197,12 @@ const AdminDashboard = () => {
               <Image className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(stats?.photos.total_photos || 0)}</div>
+              <div className="text-2xl font-bold">{formatNumber(stats?.photos?.total_photos || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                +{stats?.photos.today_uploads || 0} hari ini
+                +{stats?.photos?.today_uploads || 0} hari ini
               </p>
               <div className="mt-2 text-xs text-muted-foreground">
-                {formatNumber(stats?.photos.total_faces_detected || 0)} wajah terdeteksi
+                {formatNumber(stats?.photos?.total_faces_detected || 0)} wajah terdeteksi
               </div>
             </CardContent>
           </Card>
@@ -214,13 +214,13 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(parseFloat(revenueData?.summary.total_platform_revenue || '0'))}
+                {formatCurrency(parseFloat(revenueData?.summary?.total_platform_revenue || '0'))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {revenueData?.summary.total_transactions || 0} transaksi
+                {revenueData?.summary?.total_transactions || 0} transaksi
               </p>
               <div className="mt-2 text-xs text-muted-foreground">
-                {revenueData?.summary.unique_buyers || 0} pembeli unik
+                {revenueData?.summary?.unique_buyers || 0} pembeli unik
               </div>
             </CardContent>
           </Card>
@@ -251,7 +251,7 @@ const AdminDashboard = () => {
                   <p className="text-sm text-muted-foreground">Isi Ulang Poin</p>
                 </div>
                 <p className="text-xl font-bold text-green-600">
-                  {formatCurrency(parseFloat(revenueData?.summary.point_topup_revenue || '0'))}
+                  {formatCurrency(parseFloat(revenueData?.summary?.point_topup_revenue || '0'))}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {revenueData?.revenue_sources?.point_topup?.percentage || '0'}% dari total
@@ -264,10 +264,10 @@ const AdminDashboard = () => {
                   <p className="text-sm text-muted-foreground">Penjualan Foto</p>
                 </div>
                 <p className="text-xl font-bold text-purple-600">
-                  {formatCurrency(revenueData?.summary.photo_gross_sales || 0)}
+                  {formatCurrency(revenueData?.summary?.photo_gross_sales || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Biaya platform: {formatCurrency(revenueData?.summary.photo_platform_fee || 0)}
+                  Biaya platform: {formatCurrency(revenueData?.summary?.photo_platform_fee || 0)}
                 </p>
               </div>
               <div className="p-4 bg-background/80 rounded-lg">
@@ -276,7 +276,7 @@ const AdminDashboard = () => {
                   <p className="text-sm text-muted-foreground">Token API</p>
                 </div>
                 <p className="text-xl font-bold text-orange-600">
-                  {formatCurrency(revenueData?.summary.api_token_revenue || 0)}
+                  {formatCurrency(revenueData?.summary?.api_token_revenue || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {revenueData?.revenue_sources?.api_token?.percentage || '0'}% dari total
@@ -288,10 +288,10 @@ const AdminDashboard = () => {
                   <p className="text-sm text-muted-foreground">Rata-rata Transaksi</p>
                 </div>
                 <p className="text-xl font-bold">
-                  {formatCurrency(revenueData?.summary.avg_transaction || 0)}
+                  {formatCurrency(revenueData?.summary?.avg_transaction || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Fotografer: {formatCurrency(revenueData?.summary.photographer_earnings_total || 0)}
+                  Fotografer: {formatCurrency(revenueData?.summary?.photographer_earnings_total || 0)}
                 </p>
               </div>
             </div>
@@ -306,12 +306,12 @@ const AdminDashboard = () => {
               <Eye className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(stats?.matches.total_matches || 0)}</div>
+              <div className="text-2xl font-bold">{formatNumber(stats?.matches?.total_matches || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.matches.unique_users_matched || 0} pengguna unik
+                {stats?.matches?.unique_users_matched || 0} pengguna unik
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Rata-rata akurasi: {((stats?.matches.avg_confidence || 0) * 100).toFixed(1)}%
+                Rata-rata akurasi: {((stats?.matches?.avg_confidence || 0) * 100).toFixed(1)}%
               </p>
             </CardContent>
           </Card>
@@ -322,12 +322,12 @@ const AdminDashboard = () => {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(stats?.api_keys.total_api_keys || 0)}</div>
+              <div className="text-2xl font-bold">{formatNumber(stats?.api_keys?.total_api_keys || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.api_keys.active_keys || 0} aktif
+                {stats?.api_keys?.active_keys || 0} aktif
               </p>
               <div className="mt-2 text-xs text-muted-foreground">
-                {formatNumber(stats?.api_keys.total_tokens_used || 0)} token terpakai
+                {formatNumber(stats?.api_keys?.total_tokens_used || 0)} token terpakai
               </div>
             </CardContent>
           </Card>
@@ -338,13 +338,13 @@ const AdminDashboard = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats?.tokens.total_revenue || 0)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats?.tokens?.total_revenue || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.tokens.total_transactions || 0} transaksi
+                {stats?.tokens?.total_transactions || 0} transaksi
               </p>
               <div className="mt-2 flex gap-2 text-xs">
-                <Badge variant="outline">{stats?.tokens.purchases} Pembelian</Badge>
-                <Badge variant="outline">{stats?.tokens.renewals} Perpanjangan</Badge>
+                <Badge variant="outline">{stats?.tokens?.purchases || 0} Pembelian</Badge>
+                <Badge variant="outline">{stats?.tokens?.renewals || 0} Perpanjangan</Badge>
               </div>
             </CardContent>
           </Card>
@@ -563,7 +563,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {stats?.recent_activity.map((activity, index) => (
+              {stats?.recent_activity?.map((activity, index) => (
                 <div key={index} className="flex items-center justify-between py-2 border-b last:border-0">
                   <span className="text-sm font-medium">{activity.action}</span>
                   <Badge variant="secondary">{activity.count}x</Badge>

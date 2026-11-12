@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -217,7 +218,7 @@ const PhotoSales = () => {
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <div className="aspect-video bg-muted">
-                      <img
+                      <AuthenticatedImage
                         src={aiService.getPreviewUrl(photo.ai_photo_id)}
                         alt={photo.filename}
                         className="w-full h-full object-cover"
@@ -310,7 +311,7 @@ const PhotoSales = () => {
                   >
                     {/* Thumbnail */}
                     <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-muted shrink-0">
-                      <img
+                      <AuthenticatedImage
                         src={aiService.getPreviewUrl(photo.ai_photo_id)}
                         alt={photo.filename}
                         className="w-full h-full object-cover"

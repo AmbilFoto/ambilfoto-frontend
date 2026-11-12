@@ -1,6 +1,7 @@
 // src/components/PurchaseDetailModal.tsx
 
 import { useState, useEffect } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { buyerEscrowService, PurchaseDetail } from '@/services/api/buyer.escrow.service';
 import {
   Dialog,
@@ -222,7 +223,7 @@ const PurchaseDetailModal = ({ open, onClose, transactionId, onUpdate }: Purchas
                   {/* Preview */}
                   {detail.photo.preview_url && (
                     <div className="w-full bg-muted rounded-lg overflow-hidden border">
-                      <img 
+                      <AuthenticatedImage
                         src={detail.photo.preview_url}
                         alt={detail.photo.filename}
                         className="w-full h-auto object-contain max-h-96"

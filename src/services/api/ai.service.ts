@@ -1,11 +1,16 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-const AI_API_URL =
-  import.meta.env.VITE_AI_API_URL || 'https://3dc7-36-85-35-251.ngrok-free.app/api';
+const AI_API_URL = API_BASE_URL;
 
 const aiApi = axios.create({
   baseURL: AI_API_URL,
-  headers: { 'Content-Type': 'application/json' },
+});
+
+aiApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
 });
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
@@ -17,6 +22,7 @@ export interface PhotoMetadata {
   event_date: string;
   photographer_name: string;
   date: string;
+  event_id?: string;
 }
 
 export interface UploadPhotoData {
@@ -70,48 +76,66 @@ export const aiService = {
 
   // ── Photographer: upload photo ─────────────────────────────────────────────
   async uploadPhoto(data: UploadPhotoData): Promise<UploadResponse> {
-    const response = await aiApi.post('/photographer/upload', data);
-    return response.data;
+    const form = new FormData();
+    const imageSource = data.image.startsWith('data:')
+      || data.image.startsWith('blob:')
+      || /^https?:\/\//i.test(data.image)
+      ? data.image
+      : `data:image/jpeg;base64,${data.image}`;
+    const imageResponse = await fetch(imageSource);
+    if (!imageResponse.ok) throw new Error('Failed to read selected photo');
+    form.append('photo', await imageResponse.blob(), data.filename);
+    if (data.metadata.event_id) form.append('event_id', data.metadata.event_id);
+
+    const response = await aiApi.post('/photos/upload', form);
+    const result = response.data?.data ?? response.data;
+    return {
+      success: response.data?.success === true,
+      photo_id: result.id ?? result.photo_id,
+      faces_detected: result.face_count ?? 0,
+      dropbox_uploaded: String(result.storage_url ?? '').startsWith('dropbox://'),
+      error: response.data?.error,
+    };
   },
 
   // ── Photographer: list their photos ───────────────────────────────────────
   async getPhotographerPhotos(): Promise<PhotosResponse> {
-    const response = await aiApi.get('/photographer/photos');
-    return response.data;
+    const response = await aiApi.get('/photos');
+    const result = response.data?.data ?? response.data;
+    return { success: response.data?.success === true, photos: result.photos ?? [] };
   },
 
   // ── Photographer: delete a photo ──────────────────────────────────────────
   async deletePhoto(photoId: string): Promise<{ success: boolean; error?: string }> {
-    const response = await aiApi.delete(`/photographer/delete/${photoId}`);
+    const response = await aiApi.delete(`/photos/${photoId}`);
     return response.data;
   },
 
   // ── User: extract face embedding for registration / manual match ───────────
-  // This is the ONLY method the frontend should call directly on the AI server.
-  // All photo-matching must go through Node.js (/api/user/match-face) which
-  // handles auth, DB writes, and deduplication.
   async registerFace(image: string): Promise<FaceEmbeddingResponse> {
-    const response = await aiApi.post('/user/register_face', { image });
-    return response.data;
+    const response = await aiApi.post('/ai/extract-embedding', { image });
+    const result = response.data?.data ?? response.data;
+    return {
+      success: response.data?.success === true && Array.isArray(result.embedding),
+      embedding: result.embedding,
+      confidence: result.confidence,
+      error: response.data?.error,
+    };
   },
 
   // ── Preview URL helper ─────────────────────────────────────────────────────
-  // Returns the direct AI-server URL for a photo thumbnail.
-  // Use this when rendering <img> tags in the frontend.
   getPreviewUrl(photoId: string): string {
-    return `${AI_API_URL}/image/preview/${photoId}`;
+    return `${API_BASE_URL}/user/photos/${encodeURIComponent(photoId)}/preview`;
   },
 
-  // ── Download URL helper (direct AI server) ─────────────────────────────────
-  // NOTE: Prefer /api/user/photos/:id/download (Node.js authenticated route)
-  // over this direct URL. Only use this for public/free previews.
+  // ── Download URL helper ──────────────────────────────────────────────────
   getDownloadUrl(photoId: string): string {
-    return `${AI_API_URL}/download/dropbox/${photoId}`;
+    return `${AI_API_URL}/user/photos/${photoId}/download`;
   },
 
   // ── Health check ──────────────────────────────────────────────────────────
   async healthCheck(): Promise<{ status: string; [key: string]: unknown }> {
-    const response = await aiApi.get('/health');
-    return response.data;
+    const response = await aiApi.get('/ai/health');
+    return response.data?.data ?? response.data;
   },
 };

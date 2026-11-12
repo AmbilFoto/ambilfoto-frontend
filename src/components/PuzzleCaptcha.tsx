@@ -30,6 +30,7 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
   const sliderRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef(0);
   const dragStartPosition = useRef(0);
+  const timedOut = useRef(false);
 
   /**
    * Load challenge on mount
@@ -62,9 +63,12 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
   const loadChallenge = async () => {
     try {
       setLoading(true);
+      timedOut.current = false;
       setError(null);
+      setChallenge(null);
       setCompleted(false);
       setPosition(0);
+      puzzleCaptchaService.clearChallenge();
 
       const newChallenge = await puzzleCaptchaService.generateChallenge(action);
       
@@ -87,6 +91,8 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
    * Handle timeout
    */
   const handleTimeout = () => {
+    if (timedOut.current) return;
+    timedOut.current = true;
     setError('CAPTCHA expired. Please try again.');
     onError?.('CAPTCHA expired');
     setTimeout(() => loadChallenge(), 1000);
@@ -96,7 +102,7 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
    * Handle drag start
    */
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    if (completed) return;
+    if (completed || error) return;
 
     setDragging(true);
     
@@ -118,7 +124,7 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
     
     // Get slider width
     const sliderWidth = sliderRef.current?.offsetWidth || 300;
-    const maxPosition = sliderWidth - 60; // 60px is puzzle piece width
+    const maxPosition = sliderWidth - 44;
 
     // Calculate new position
     let newPosition = dragStartPosition.current + deltaX;
@@ -130,34 +136,28 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
   /**
    * Handle drag end
    */
-  const handleDragEnd = () => {
+  const handleDragEnd = async () => {
     if (!dragging) return;
 
     setDragging(false);
 
-    // Check if position is close enough to complete
-    if (position > 10) { // Must move at least 10px
-      handleComplete();
+    if (position > 10) {
+      await handleComplete();
     }
   };
 
   /**
    * Complete puzzle
    */
-  const handleComplete = () => {
+  const handleComplete = async () => {
     try {
-      if (completed) return;
-
-      // Generate solution token
-      const token = puzzleCaptchaService.createSolutionToken(Math.round(position));
+      if (completed || error) return;
+      const maxPosition = Math.max(1, (sliderRef.current?.offsetWidth || 300) - 44);
+      const normalizedPosition = Math.round((position / maxPosition) * 1000);
+      const token = await puzzleCaptchaService.verifySolution(normalizedPosition);
       
       setCompleted(true);
       onComplete(token);
-
-      console.log('✅ Puzzle completed:', {
-        position,
-        token: token.substring(0, 20) + '...'
-      });
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to complete CAPTCHA';
       setError(errorMsg);
@@ -172,7 +172,7 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
     if (!dragging) return;
 
     const handleMove = (e: MouseEvent | TouchEvent) => handleDragMove(e);
-    const handleEnd = () => handleDragEnd();
+    const handleEnd = () => { void handleDragEnd(); };
 
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleEnd);
@@ -256,18 +256,27 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
       <div className="relative">
         {/* Background Image */}
         {challenge && (
-          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted">
+          <div
+            className="relative w-full rounded-lg overflow-hidden bg-muted"
+            style={{ aspectRatio: '18 / 7' }}
+          >
             <img
               src={challenge.imageUrl}
               alt="Puzzle background"
-              className="w-full h-full object-cover"
+              className="w-full h-full"
               draggable={false}
             />
-            
-            {/* Puzzle piece slot (showing where piece should go) */}
-            <div 
-              className="absolute top-1/2 -translate-y-1/2 w-14 h-14 border-2 border-dashed border-white/50 rounded-lg bg-black/20"
-              style={{ left: '50%', transform: 'translate(-50%, -50%)' }}
+            <div
+              aria-hidden="true"
+              className={cn(
+                'absolute top-[39.3%] aspect-square rounded-md border-[3px] border-white shadow-lg transition-colors',
+                completed ? 'bg-green-500' : 'bg-primary'
+              )}
+              style={{
+                width: '12.22%',
+                left: `${(position / Math.max(1, (sliderRef.current?.offsetWidth || 300) - 44)) * 87.78}%`,
+                pointerEvents: 'none',
+              }}
             />
           </div>
         )}
@@ -289,13 +298,30 @@ export const PuzzleCaptcha: React.FC<PuzzleCaptchaProps> = ({
           {/* Slider handle (puzzle piece) */}
           <div
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 w-14 h-14 rounded-lg shadow-lg cursor-grab active:cursor-grabbing transition-all",
+              "absolute top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg shadow-lg cursor-grab active:cursor-grabbing transition-all",
               completed ? "bg-green-500" : "bg-primary",
               dragging && "scale-110 shadow-xl"
             )}
             style={{ left: `${position}px` }}
             onMouseDown={handleDragStart}
             onTouchStart={handleDragStart}
+            role="slider"
+            aria-label="Move the puzzle piece to the matching opening"
+            aria-valuemin={0}
+            aria-valuemax={1000}
+            aria-valuenow={Math.round((position / Math.max(1, (sliderRef.current?.offsetWidth || 300) - 44)) * 1000)}
+            tabIndex={completed || error ? -1 : 0}
+            onKeyDown={(e) => {
+              const maxPosition = Math.max(1, (sliderRef.current?.offsetWidth || 300) - 44);
+              if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setPosition((current) => Math.max(0, Math.min(maxPosition, current + (e.key === 'ArrowRight' ? 5 : -5))));
+              }
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                void handleComplete();
+              }
+            }}
           >
             {/* Puzzle piece icon */}
             <div className="flex items-center justify-center h-full">

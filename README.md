@@ -70,3 +70,24 @@ npm run build
 # atau
 yarn build
 ```
+
+## Menjalankan bersama microservices
+
+Jalankan backend dari repository microservices di terminal pertama:
+
+```sh
+docker compose -f "../ambilfoto-microservices 2/docker-compose.yml" up --build
+```
+
+Setelah gateway siap di `http://localhost:8080`, jalankan frontend di terminal
+kedua:
+
+```sh
+npm run dev
+```
+
+Frontend tersedia di `http://localhost:5173` dan secara default memakai satu
+API Gateway (`http://localhost:8080/api`) untuk Auth, User, Photographer,
+Photo, AI, Payment, Developer, dan service lainnya. Jika gateway berjalan di
+host lain, atur `VITE_API_BASE_URL` di file `.env` frontend, misalnya
+`VITE_API_BASE_URL=https://api.ambilfoto.com/api`.

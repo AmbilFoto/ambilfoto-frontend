@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3000/api';
+const AUTH_API_URL = API_BASE_URL;
 
 const photographerApi = axios.create({
   baseURL: AUTH_API_URL,
@@ -422,12 +423,12 @@ export const photographerService = {
   // ── Location ─────────────────────────────────────────────────
 
   async getProvinces(): Promise<{ success: boolean; data?: Province[]; error?: string }> {
-    const response = await photographerApi.get('/photographer/locations/provinces');
+    const response = await photographerApi.get('/master/provinces');
     return response.data;
   },
 
   async getCities(provinceId: string): Promise<{ success: boolean; data?: City[]; error?: string }> {
-    const response = await photographerApi.get(`/photographer/locations/cities/${provinceId}`);
+    const response = await photographerApi.get('/master/cities', { params: { province_id: provinceId } });
     return response.data;
   },
 
@@ -435,7 +436,10 @@ export const photographerService = {
     province_id: string;
     city_id: string;
   }): Promise<{ success: boolean; data?: LocationUpdateResponse; error?: string }> {
-    const response = await photographerApi.put('/photographer/profile/location', data);
+    const response = await photographerApi.put('/photographer/profile', {
+      province_id: Number(data.province_id),
+      city_id: Number(data.city_id),
+    });
     return response.data;
   },
 

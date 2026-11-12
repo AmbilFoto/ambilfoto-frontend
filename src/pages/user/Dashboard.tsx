@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -539,7 +540,7 @@ const UserDashboard = () => {
                       <Link key={photo.photo_id} to="/user/photos">
                         <Card className="overflow-hidden border-2 border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group">
                           <div className="aspect-square bg-gray-100 relative">
-                            <img
+                            <AuthenticatedImage
                               src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
                               alt={photo.filename}
                               className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
@@ -579,7 +580,7 @@ const UserDashboard = () => {
                           <div className="flex items-center gap-4">
                             <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                               {purchase.photo.preview_url ? (
-                                <img src={purchase.photo.preview_url} alt={purchase.photo.filename} className="w-full h-full object-cover" />
+                                <AuthenticatedImage src={purchase.photo.preview_url} alt={purchase.photo.filename} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <Package className="h-6 w-6 text-gray-400" />
@@ -672,7 +673,7 @@ const UserDashboard = () => {
                       >
                         <div className="relative h-28 overflow-hidden rounded-t-xl bg-gradient-to-br from-yellow-50 to-blue-50">
                           {event.photos[0] && (
-                            <img
+                            <AuthenticatedImage
                               src={event.photos[0].preview_url || aiService.getPreviewUrl(event.photos[0].photo_id)}
                               alt={event.name}
                               className="absolute inset-0 w-full h-full object-cover opacity-70"
@@ -732,7 +733,7 @@ const UserDashboard = () => {
                         <div className="flex flex-col md:flex-row gap-4">
                           <div className="w-full md:w-24 h-20 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                             {purchase.photo.preview_url ? (
-                              <img src={purchase.photo.preview_url} alt={purchase.photo.filename} className="w-full h-full object-cover" />
+                              <AuthenticatedImage src={purchase.photo.preview_url} alt={purchase.photo.filename} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <Package className="h-8 w-8 text-gray-400" />
@@ -832,7 +833,7 @@ const UserDashboard = () => {
                     <Link key={photo.photo_id} to="/user/photos">
                       <Card className="overflow-hidden border-2 border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group">
                         <div className="aspect-square bg-gray-100 relative">
-                          <img
+                          <AuthenticatedImage
                             src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
                             alt={photo.filename}
                             className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
@@ -902,7 +903,7 @@ const UserDashboard = () => {
                       >
                         <div className="h-32 bg-gradient-to-br from-blue-100 to-yellow-100 relative overflow-hidden">
                           {event.photos[0] && (
-                            <img
+                            <AuthenticatedImage
                               src={event.photos[0].preview_url || aiService.getPreviewUrl(event.photos[0].photo_id)}
                               alt={event.name}
                               className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-300"

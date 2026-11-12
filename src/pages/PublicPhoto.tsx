@@ -7,6 +7,7 @@ import {
   LayoutGrid, List, ArrowUpRight, ImageIcon, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/Header";
@@ -17,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatRupiah } from "@/utils/currency";
 import { toast } from "sonner";
 import axios from "axios";
+import { API_BASE_URL } from "@/services/api/api.config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +56,7 @@ interface FilterState {
 
 // ─── API helper ───────────────────────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_AUTH_API_URL || "http://localhost:3000/api";
+const API_URL = API_BASE_URL;
 
 const fetchPublicPhotos = async (params?: {
   page?: number;
@@ -110,7 +112,7 @@ const PhotoCard = ({
         {!imgLoaded && (
           <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse" />
         )}
-        <img
+        <AuthenticatedImage
           src={photo.thumbnail_url || photo.preview_url}
           alt={photo.filename}
           className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-110 ${
@@ -214,7 +216,7 @@ const PreviewModal = ({
       >
         {/* Image side */}
         <div className="md:w-3/5 bg-black flex items-center justify-center min-h-[300px]">
-          <img
+          <AuthenticatedImage
             src={photo.preview_url}
             alt={photo.filename}
             className="w-full h-full object-contain max-h-[70vh] md:max-h-[90vh]"
@@ -435,7 +437,7 @@ export default function PublicPhotosPage() {
               className="absolute w-1/3 h-full opacity-20"
               style={{ left: `${i * 16.666}%`, top: 0 }}
             >
-              <img src={p.preview_url} className="w-full h-full object-cover" alt="" />
+              <AuthenticatedImage src={p.preview_url} className="w-full h-full object-cover" alt="" />
             </div>
           ))}
         </div>

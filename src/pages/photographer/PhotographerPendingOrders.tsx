@@ -1,6 +1,7 @@
 // src/pages/PhotographerPendingOrders.tsx
 
 import { useState, useEffect, useRef } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { Link } from 'react-router-dom';
 import { photographerEscrowService, PendingOrder } from '@/services/api/photographer.escrow.service';
 import { Header } from '@/components/layout/Header';
@@ -383,7 +384,7 @@ const PhotographerPendingOrders = () => {
                         {/* Pratinjau Foto */}
                         <div className="w-full md:w-32 h-24 bg-muted rounded-lg overflow-hidden flex-shrink-0">
                           {order.photo.preview_url ? (
-                            <img 
+                            <AuthenticatedImage
                               src={order.photo.preview_url}
                               alt={order.photo.filename}
                               className="w-full h-full object-cover"

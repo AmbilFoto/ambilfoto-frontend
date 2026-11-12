@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -95,14 +96,14 @@ export const PhotoListItem = ({
             <AlertCircle className="h-8 w-8 text-muted-foreground" />
           ) : (
             <>
-              <img
+              <AuthenticatedImage
                 src={previewUrl}
                 alt={photo.filename}
                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
                 onLoad={() => setImageLoaded(true)}
-                onError={() => setImageError(true)}
+                onLoadError={() => setImageError(true)}
               />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
                 <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />

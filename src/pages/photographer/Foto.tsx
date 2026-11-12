@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Upload, ImageIcon, MapPin, Search, Filter,
@@ -198,7 +199,7 @@ const PhotoGridCard = ({
   return (
     <Card className="group overflow-hidden border-2 border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all duration-300 rounded-2xl bg-white">
       <div className="relative aspect-square bg-gray-100 overflow-hidden">
-        <img
+        <AuthenticatedImage
           src={photo.preview_url}
           alt={photo.filename}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -290,7 +291,7 @@ const PhotoListRow = ({
       <CardContent className="p-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-            <img src={photo.preview_url} alt={photo.filename} className="w-full h-full object-cover" />
+            <AuthenticatedImage src={photo.preview_url} alt={photo.filename} className="w-full h-full object-cover" />
           </div>
 
           <div className="flex-1 min-w-0">

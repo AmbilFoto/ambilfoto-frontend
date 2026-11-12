@@ -1,4 +1,5 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, X, ChevronLeft, ChevronRight, Calendar, MapPin, Camera, Sparkles, Eye, ShoppingCart, Coins, FileImage, Tag, Clock, CheckCircle, Heart } from "lucide-react";
@@ -93,7 +94,7 @@ export const PhotoDetailModal = ({
 
           {/* Image Preview */}
           <div className="relative aspect-[4/3] bg-muted overflow-hidden">
-            <img
+            <AuthenticatedImage
               src={previewUrl}
               alt={photo.filename}
               className="w-full h-full object-cover"

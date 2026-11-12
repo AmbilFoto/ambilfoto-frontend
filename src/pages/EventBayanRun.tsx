@@ -23,7 +23,7 @@ const EVENT_DAYS = [
   { key: "2026-10-09", label: "9 Okt" },
 ] as const;
 
-const API_BASE_URL = "https://engine-af.ambilfoto.id"; // tanpa trailing slash
+const API_BASE_URL = "http://localhost:5050"; // tanpa trailing slash
 
 const BIOMETRIC_API_BASE =
   `${API_BASE_URL}/api/user/biometric`;
@@ -39,6 +39,9 @@ const PHOTOS_ENDPOINT =
 
 const DOWNLOAD_ENDPOINT =
   `${API_BASE_URL}/api/user/download_encrypted`;
+
+const DOWNLOAD_KEY_ENDPOINT =
+  `${API_BASE_URL}/api/user/download_cache_key_by_id`;
 
 const PREVIEW_MATCH_ENDPOINT = (filename: string) =>
   `${API_BASE_URL}/api/user/preview_match_encrypted_by_id/${encodeURIComponent(filename)}`;
@@ -136,9 +139,13 @@ interface PreviewPayload {
   metadata: FaceMatchMetadata | null;
 }
 
-/* Metadata ringan untuk mengambil bytes gambar (URL CDN + kunci). Bukan koordinat wajah. */
+/* Metadata ringan untuk mengambil bytes gambar (URL CDN + kunci). Bukan koordinat wajah.
+   HYBRID:
+   - plaintext=false -> file di CDN/NOS berupa ciphertext (alur lama, didekripsi di browser).
+   - plaintext=true  -> file di Synology sudah JPEG biasa (tanpa dekripsi, wrappedDek/fileNonce kosong). */
 interface PreviewMeta {
   url: string;
+  plaintext: boolean;
   wrappedDek: string;
   fileNonce: string;
 }
@@ -530,6 +537,42 @@ async function decryptPreviewCiphertext(
   );
 }
 
+/* ═══════════════ HYBRID: helper plaintext (Synology JPEG biasa) ═══════════════ */
+
+/** True kalau respons backend menandakan file di storage sudah JPEG biasa (tanpa enkripsi). */
+function isPlaintextKeyResponse(data: {
+  plaintext?: unknown;
+  wrapped_dek?: unknown;
+  file_nonce?: unknown;
+}): boolean {
+  return data.plaintext === true || !data.wrapped_dek || !data.file_nonce;
+}
+
+/** JPEG selalu diawali FF D8. Mencegah halaman HTML / error 403 tampil sebagai gambar rusak. */
+function assertJpegBytes(bytes: ArrayBuffer): ArrayBuffer {
+  const head = new Uint8Array(bytes.slice(0, 2));
+  if (head.length < 2 || head[0] !== 0xff || head[1] !== 0xd8) {
+    throw new Error("File dari CDN bukan JPEG yang valid");
+  }
+  return bytes;
+}
+
+/** Ambil bytes dari URL CDN. Plaintext -> langsung dipakai; ciphertext -> didekripsi di browser. */
+async function readCdnBytes(
+  response: Response,
+  plaintext: boolean,
+  wrappedDek: string,
+  fileNonce: string,
+  keyPair: CryptoKeyPair
+): Promise<ArrayBuffer> {
+  if ((response.headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
+    throw new Error("CDN mengembalikan halaman HTML, bukan file");
+  }
+  const bytes = await response.arrayBuffer();
+  if (plaintext) return assertJpegBytes(bytes);
+  return decryptPreviewCiphertext(bytes, wrappedDek, fileNonce, keyPair);
+}
+
 async function fetchPreviewViaMeta(
   meta: PreviewMeta,
   keyPair: CryptoKeyPair
@@ -538,12 +581,7 @@ async function fetchPreviewViaMeta(
   if (!imageResponse.ok) {
     throw new Error(`CDN preview gagal (${imageResponse.status})`);
   }
-  return decryptPreviewCiphertext(
-    await imageResponse.arrayBuffer(),
-    meta.wrappedDek,
-    meta.fileNonce,
-    keyPair
-  );
+  return readCdnBytes(imageResponse, meta.plaintext, meta.wrappedDek, meta.fileNonce, keyPair);
 }
 
 /** Metadata overlay dari header endpoint fallback (X-Matched-Faces, X-Preview-Width/Height, ...). */
@@ -588,7 +626,7 @@ async function fetchPreviewBytes(
     previewMetaCache.delete(cacheKey); // metadata belum ada -> satu request ke API
   }
 
-  // 2) API: endpoint CDN terenkripsi
+  // 2) API: endpoint CDN (NOS terenkripsi ATAU Synology JPEG biasa — backend yang menentukan)
   try {
     const keyResponse = await fetch(PREVIEW_CACHE_KEY_ENDPOINT(filename), {
       method: "POST",
@@ -603,8 +641,9 @@ async function fetchPreviewBytes(
       const keyData = await keyResponse.json();
       const meta: PreviewMeta = {
         url: keyData.url,
-        wrappedDek: keyData.wrapped_dek,
-        fileNonce: keyData.file_nonce,
+        plaintext: isPlaintextKeyResponse(keyData),
+        wrappedDek: keyData.wrapped_dek ?? "",
+        fileNonce: keyData.file_nonce ?? "",
       };
       const bytes = await fetchPreviewViaMeta(meta, keyPair);
       previewMetaCache.set(cacheKey, meta);
@@ -1135,7 +1174,6 @@ const EventPublicBayanRun2026 = () => {
         showToast("Sesi wajah belum tersedia.");
         return;
       }
-
       if (!photo.photo_id) {
         showToast("ID foto tidak tersedia.");
         return;
@@ -1147,36 +1185,65 @@ const EventPublicBayanRun2026 = () => {
       try {
         const keyPair = await getDeviceKeyPair();
         const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-        const response = await fetch(DOWNLOAD_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: userId,
-            photo_id: photo.photo_id,
-            public_key: publicKey,
-          }),
+        const reqBody = JSON.stringify({
+          user_id: userId,
+          photo_id: photo.photo_id,
+          public_key: publicKey,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.error || `Download gagal (${response.status})`);
+        let plaintext: ArrayBuffer | null = null;
+        let fileName = photo.filename || "foto.jpg";
+
+        // 1) Jalur cepat: file langsung dari CDN/Synology, kunci (kalau ada) dari server.
+        //    - Synology (plaintext): bytes JPEG dipakai apa adanya.
+        //    - NOS (ciphertext): didekripsi di browser seperti sebelumnya.
+        try {
+          const keyRes = await fetch(DOWNLOAD_KEY_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: reqBody,
+          });
+          if (keyRes.ok) {
+            const k = await keyRes.json();
+            const cdnRes = await fetch(k.url);
+            if (!cdnRes.ok) throw new Error(`CDN ${cdnRes.status}`);
+            plaintext = await readCdnBytes(
+              cdnRes,
+              isPlaintextKeyResponse(k),
+              k.wrapped_dek ?? "",
+              k.file_nonce ?? "",
+              keyPair
+            );
+            if (k.original_name) fileName = k.original_name;
+          }
+        } catch (error) {
+          console.warn("Download CDN tidak tersedia, memakai jalur server:", error);
+          plaintext = null;
         }
 
-        const plaintext = await decryptEncryptedResponse(response, keyPair);
+        // 2) Fallback: lewat Flask (original masih di NOS / CDN gagal).
+        if (!plaintext) {
+          const response = await fetch(DOWNLOAD_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: reqBody,
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.error || `Download gagal (${response.status})`);
+          }
+          plaintext = await decryptEncryptedResponse(response, keyPair);
+        }
+
         const blob = new Blob([plaintext], { type: "image/jpeg" });
         const blobUrl = URL.createObjectURL(blob);
-
         const link = document.createElement("a");
         link.href = blobUrl;
-        link.download = photo.filename || "foto.jpg";
-
+        link.download = fileName;
         document.body.appendChild(link);
         link.click();
         link.remove();
-
-        window.setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-        }, 4000);
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
 
         showToast("Download dimulai.");
       } catch (error) {

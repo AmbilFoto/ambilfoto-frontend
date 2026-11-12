@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -479,7 +480,7 @@ const EventDetail = () => {
                   {uploadingPhotos.map((photo) => (
                     <div key={photo.id} className="relative group">
                       <div className="aspect-square rounded-lg overflow-hidden bg-muted">
-                        <img
+                        <AuthenticatedImage
                           src={photo.preview}
                           alt={photo.file.name}
                           className="w-full h-full object-cover"
@@ -550,7 +551,7 @@ const EventDetail = () => {
                     <div key={photo.id} className="relative group rounded-xl overflow-hidden border bg-card animate-fade-in">
                       {/* Image */}
                       <div className="aspect-square overflow-hidden bg-muted">
-                        <img
+                        <AuthenticatedImage
                           src={aiService.getPreviewUrl(photo.ai_photo_id)}
                           alt={photo.filename}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"

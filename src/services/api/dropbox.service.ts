@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3000/api';
+const AUTH_API_URL = API_BASE_URL;
 
 const dropboxApi = axios.create({
   baseURL: `${AUTH_API_URL}/admin`,

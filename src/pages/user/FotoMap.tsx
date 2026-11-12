@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -376,7 +377,7 @@ export default function FotoMap() {
               >
                 <Popup className="custom-popup" maxWidth={280}>
                   <div className="w-full">
-                    <img
+                    <AuthenticatedImage
                       src={photo.preview_url}
                       alt={photo.filename}
                       className="w-full h-44 object-cover rounded-lg mb-3"

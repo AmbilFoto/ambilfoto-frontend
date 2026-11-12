@@ -47,10 +47,17 @@ class CaptchaService {
     }
 
     try {
-      const response = await authApi.get('/captcha/config');
+      const response = await authApi.get('/security/captcha/config');
       
       if (response.data.success) {
-        this.config = response.data.config;
+        const data = response.data.data ?? response.data.config ?? {};
+        const siteKey = data.site_key ?? data.siteKey ?? '';
+        this.config = {
+          provider: 'recaptcha',
+          enabled: Boolean(siteKey),
+          require: { login: 0, register: 0, passwordReset: 0, otpRequest: 0 },
+          recaptcha: { siteKey, version: 'turnstile' },
+        };
         this.configLoaded = true;
         
         // Preload reCAPTCHA if needed

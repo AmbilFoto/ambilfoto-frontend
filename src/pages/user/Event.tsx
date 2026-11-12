@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import HeaderDash from "@/components/layout/HeaderDash";
@@ -314,7 +315,7 @@ const UserEventsListPage = () => {
                   {/* Cover */}
                   <div className="relative h-44 bg-muted overflow-hidden">
                     {coverPhoto && (
-                      <img
+                      <AuthenticatedImage
                         src={coverPhoto.preview_url || aiService.getPreviewUrl(coverPhoto.photo_id)}
                         alt={event.event_name}
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80"
@@ -423,7 +424,7 @@ const UserEventsListPage = () => {
                   {/* Thumbnail */}
                   <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-muted">
                     {coverPhoto && (
-                      <img
+                      <AuthenticatedImage
                         src={coverPhoto.preview_url || aiService.getPreviewUrl(coverPhoto.photo_id)}
                         alt={event.event_name}
                         className="absolute inset-0 w-full h-full object-cover"

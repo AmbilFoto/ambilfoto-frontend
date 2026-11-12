@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, ShoppingCart, Heart, Eye, MapPin, Calendar } from "lucide-react";
@@ -70,7 +71,7 @@ export const PhotoCard = ({
     >
       {/* Image Container */}
       <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-        <img
+        <AuthenticatedImage
           src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
           alt={photo.filename}
           className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"

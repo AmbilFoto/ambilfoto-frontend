@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -97,7 +98,7 @@ const PhotoModal = ({
 
       {/* Foto */}
       <div className="bg-black flex items-center justify-center" style={{ maxHeight: "65vh" }}>
-        <img
+        <AuthenticatedImage
           src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
           alt={photo.filename}
           className="max-h-full w-full object-contain"
@@ -490,7 +491,7 @@ const UserEventPage = () => {
               >
                 {/* Thumbnail */}
                 <div className="relative aspect-square bg-muted overflow-hidden">
-                  <img
+                  <AuthenticatedImage
                     src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
                     alt={photo.filename}
                     className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -570,7 +571,7 @@ const UserEventPage = () => {
               >
                 {/* Thumbnail */}
                 <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-muted">
-                  <img
+                  <AuthenticatedImage
                     src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
                     alt={photo.filename}
                     className="absolute inset-0 w-full h-full object-cover"

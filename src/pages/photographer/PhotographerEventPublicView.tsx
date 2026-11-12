@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Calendar, Camera, ImageIcon, Download,
@@ -37,7 +38,7 @@ const PhotoCard = ({
           <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse" />
         )}
 
-        <img
+        <AuthenticatedImage
           src={photo.preview_url}
           alt={photo.filename}
           loading="lazy"
@@ -168,10 +169,10 @@ const PhotoModal = ({
         <div className="relative">
           {/* Ambient glow */}
           <div className="absolute inset-0 scale-95 blur-2xl opacity-30 rounded-2xl overflow-hidden">
-            <img src={photo.preview_url} alt="" className="w-full h-full object-cover" />
+            <AuthenticatedImage src={photo.preview_url} alt="" className="w-full h-full object-cover" />
           </div>
 
-          <img
+          <AuthenticatedImage
             src={photo.preview_url}
             alt={photo.filename}
             className="relative z-10 max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl"
@@ -317,7 +318,7 @@ export default function PhotographerEventPublicView() {
               className="absolute h-full opacity-40"
               style={{ width: '20%', left: `${i * 20}%` }}
             >
-              <img src={p.preview_url} className="w-full h-full object-cover" alt="" />
+              <AuthenticatedImage src={p.preview_url} className="w-full h-full object-cover" alt="" />
             </div>
           ))}
         </div>

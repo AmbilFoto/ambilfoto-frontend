@@ -165,6 +165,7 @@ const DeveloperLogin = () => {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileReady, setTurnstileReady] = useState(false);
   const [turnstileWidgetId, setTurnstileWidgetId] = useState<string | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
 
   const redirectParam = new URLSearchParams(location.search).get("redirect");
@@ -200,8 +201,8 @@ const DeveloperLogin = () => {
     document.head.appendChild(script);
 
     return () => {
-      if (turnstileWidgetId && (window as any).turnstile) {
-        (window as any).turnstile.remove(turnstileWidgetId);
+      if (turnstileWidgetIdRef.current && (window as any).turnstile) {
+        (window as any).turnstile.remove(turnstileWidgetIdRef.current);
       }
     };
   }, []);
@@ -221,6 +222,7 @@ const DeveloperLogin = () => {
       "error-callback": () => setTurnstileToken(null),
     });
 
+    turnstileWidgetIdRef.current = widgetId;
     setTurnstileWidgetId(widgetId);
   }, [turnstileReady]);
 

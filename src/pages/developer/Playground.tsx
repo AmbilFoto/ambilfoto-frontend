@@ -225,7 +225,7 @@ const DeveloperPlayground = () => {
   const [baseUrl, setBaseUrl] = useState(() =>
     import.meta.env.VITE_API_BASE_URL
       ? `${import.meta.env.VITE_API_BASE_URL}/v1`
-      : "http://localhost:5000/api/v1"
+      : "http://localhost:8080/api/v1"
   );
   const [path, setPath] = useState("/usage");
   const [headers, setHeaders] = useState<KVRow[]>([

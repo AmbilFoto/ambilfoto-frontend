@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -566,7 +567,7 @@ export default function PublicEventDetailPage() {
                       <div key={photo.id} className="group rounded-xl overflow-hidden border border-border bg-card">
                         {/* Image */}
                         <div className="aspect-square relative overflow-hidden bg-muted">
-                          <img
+                          <AuthenticatedImage
                             src={photo.preview_url}
                             alt={photo.filename}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"

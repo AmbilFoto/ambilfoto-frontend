@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from "react";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { X, ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 import { Photo, aiService } from "@/services/api/ai.service";
@@ -133,9 +134,10 @@ export const PhotoLightbox = ({
         className="relative max-w-[90vw] max-h-[90vh] z-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <img
+        <AuthenticatedImage
           src={aiService.getPreviewUrl(photo.photo_id)}
           alt={photo.filename}
+          loading="eager"
           className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
         />
         

@@ -1,6 +1,7 @@
 // src/pages/BuyerPurchases.tsx
 
 import { useState, useEffect } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { Link, useNavigate } from 'react-router-dom'; // ✅ tambah useNavigate
 import { buyerEscrowService, BuyerPurchase, buyerEscrowHelpers } from '@/services/api/buyer.escrow.service';
 import { chatService } from '@/services/api/chat.service'; // ✅ tambah import
@@ -338,7 +339,7 @@ const BuyerPurchases = () => {
                         {/* Preview */}
                         <div className="w-full md:w-32 h-24 bg-muted rounded-lg overflow-hidden flex-shrink-0">
                           {purchase.photo.preview_url ? (
-                            <img 
+                            <AuthenticatedImage
                               src={purchase.photo.preview_url}
                               alt={purchase.photo.filename}
                               className="w-full h-full object-cover"

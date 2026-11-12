@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3000/api';
+const AUTH_API_URL = API_BASE_URL;
 
 const userApi = axios.create({
   baseURL: AUTH_API_URL,
@@ -235,12 +236,12 @@ export const userService = {
   },
 
   // ── Match photos via AI (dipanggil dari useMyPhotos background trigger) ───────
-    async matchMyPhotos(data: { embedding: number[]; user_id: string }): Promise<MyPhotosResponse> {
-      const response = await userApi.post('/user/my_photos', {
-        embedding: data.embedding,
-        user_id: data.user_id,
-      });
-      return response.data;
+    async matchMyPhotos(_data: { embedding: number[]; user_id?: string }): Promise<MyPhotosResponse> {
+      const response = await userApi.get('/user/my-photos');
+      return {
+        success: response.data?.success === true,
+        data: response.data?.data ?? [],
+      };
     },
 
   // ── My Photos (event matches, cached) ─────────────────────────────────────────

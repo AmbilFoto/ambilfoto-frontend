@@ -37,8 +37,9 @@ import {
   RadialBar,
 } from "recharts";
 import axios from "axios";
+import { API_BASE_URL } from "@/services/api/api.config";
 
-const API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/api';
+const API_URL = API_BASE_URL;
 
 // Buat instance axios terautentikasi
 const adminApi = axios.create({

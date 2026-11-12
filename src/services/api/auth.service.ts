@@ -1,10 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api.config';
 
-// TODO: ganti balik ke http://localhost:8080/api begitu API Gateway sudah
-// jalan dan route /api/auth/* sudah diproxy ke Auth Service (:8001).
-// Untuk sekarang, langsung ke Auth Service karena gateway belum di-setup.
-const AUTH_API_URL =
-  import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8001/api';
+const AUTH_API_URL = API_BASE_URL;
 
 // ✅ EXPORT authApi agar bisa dipakai di puzzle-captcha.service.ts
 export const authApi = axios.create({
@@ -60,7 +57,7 @@ export interface LoginData {
 }
 
 export interface FaceLoginData {
-  face_embedding: string; // ✅ consistent with face_embedding contract everywhere
+  face_image: string;
   captcha_token?: string | null;
 }
 
@@ -121,8 +118,7 @@ export const authService = {
 
   /**
    * Login using face biometric
-   * NOTE: backend endpoint saat ini masih 501 Not Implemented
-   * (nunggu integrasi AI Service) — panggil ini akan gagal sampai itu selesai.
+   * Face login delegates embedding extraction to AI Service.
    */
   async loginWithFace(data: FaceLoginData): Promise<AuthResponse> {
     const response = await authApi.post('/auth/login/face', data);

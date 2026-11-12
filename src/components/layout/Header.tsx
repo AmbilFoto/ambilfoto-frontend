@@ -145,9 +145,14 @@ export const Header = () => {
             </DropdownMenu>
           ) : (
             <>
-              {/* Desktop auth buttons
-              <Link to="/login"    className="hidden md:inline-flex"><Button variant="ghost">Masuk</Button></Link>
-              <Link to="/register" className="hidden md:inline-flex"><Button>Daftar</Button></Link> */}
+              <div className="hidden md:flex items-center gap-2">
+                <Link to="/login">
+                  <Button variant="ghost">Masuk</Button>
+                </Link>
+                <Link to="/register">
+                  <Button>Daftar</Button>
+                </Link>
+              </div>
 
               {/* Mobile hamburger — hanya muncul kalau belum login */}
               <button
@@ -176,12 +181,12 @@ export const Header = () => {
             </Link>
           ))}
           <div className="flex gap-3 pt-4">
-               {/*<Link to="/login"    className="flex-1" onClick={() => setMobileOpen(false)}>
+            <Link to="/login" className="flex-1" onClick={() => setMobileOpen(false)}>
               <Button variant="outline" className="w-full">Masuk</Button>
             </Link>
             <Link to="/register" className="flex-1" onClick={() => setMobileOpen(false)}>
               <Button className="w-full">Daftar</Button>
-            </Link>*/}
+            </Link>
           </div>
         </div>
       )}
