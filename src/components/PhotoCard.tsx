@@ -14,6 +14,7 @@ interface PhotoCardProps {
   onToggleFavorite?: () => void;
   isDownloading: boolean;
   onClick: () => void;
+  authenticatedPreview?: boolean;
 }
 
 export const PhotoCard = ({
@@ -23,6 +24,7 @@ export const PhotoCard = ({
   onToggleFavorite,
   isDownloading,
   onClick,
+  authenticatedPreview = false,
 }: PhotoCardProps) => {
   const isPurchased = photo.is_purchased === true || photo.is_purchased === 1;
   const isFree =
@@ -71,12 +73,21 @@ export const PhotoCard = ({
     >
       {/* Image Container */}
       <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-        <AuthenticatedImage
-          src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
-          alt={photo.filename}
-          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-          loading="lazy"
-        />
+        {authenticatedPreview ? (
+          <AuthenticatedImage
+            src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
+            alt={photo.filename}
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            loading="lazy"
+          />
+        ) : (
+          <img
+            src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
+            alt={photo.filename}
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            loading="lazy"
+          />
+        )}
 
         {/* Overlay Gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

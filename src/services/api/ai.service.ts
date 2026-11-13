@@ -70,6 +70,32 @@ export interface FaceEmbeddingResponse {
   error?: string;
 }
 
+export interface BiometricStartResponse {
+  session_id: string;
+  challenge: string[];
+  expires_in: number;
+}
+
+export interface BiometricFrameResponse {
+  success: boolean;
+  matched: boolean;
+  message?: string;
+  next_challenge?: string | null;
+  done: boolean;
+  attempts_remaining?: number;
+  pose_progress?: number;
+  holding?: boolean;
+  hold_progress?: number;
+}
+
+export interface BiometricCompleteResponse {
+  liveness_score: number;
+  liveness_status: string;
+  quality_score: number;
+  angles_captured: string[];
+  matched_photos: number;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const aiService = {
@@ -121,6 +147,29 @@ export const aiService = {
       confidence: result.confidence,
       error: response.data?.error,
     };
+  },
+
+  async startBiometric(): Promise<BiometricStartResponse> {
+    const response = await aiApi.post('/ai/biometric/start', { min_angles: 4 });
+    return response.data?.data ?? response.data;
+  },
+
+  async submitBiometricFrame(
+    sessionId: string,
+    challenge: string,
+    frame: string,
+  ): Promise<BiometricFrameResponse> {
+    const response = await aiApi.post('/ai/biometric/frame', {
+      session_id: sessionId,
+      challenge,
+      frame,
+    });
+    return response.data?.data ?? response.data;
+  },
+
+  async completeBiometric(sessionId: string): Promise<BiometricCompleteResponse> {
+    const response = await aiApi.post('/ai/biometric/complete', { session_id: sessionId });
+    return response.data?.data ?? response.data;
   },
 
   // ── Preview URL helper ─────────────────────────────────────────────────────

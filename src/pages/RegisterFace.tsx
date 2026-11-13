@@ -1,14 +1,12 @@
-import { useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Sparkles } from "lucide-react";
-import { FaceCamera } from "@/components/camera/FaceCamera";
+import { BiometricLivenessScan } from "@/components/camera/BiometricLivenessScan";
+import { BiometricCompleteResponse } from "@/services/api/ai.service";
 import { useToast } from "@/hooks/use-toast";
-import { authService } from "@/services/api/auth.service";
 
 const RegisterFace = () => {
-  const [isProcessing, setIsProcessing] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -26,21 +24,7 @@ const RegisterFace = () => {
     return null;
   }
 
-  const handleCapture = async (imageData: string) => {
-    setIsProcessing(true);
-
-    try {
-      const res = await authService.registerFace(imageData);
-
-      if (!res.success) {
-        throw new Error(res.error || "Face upload failed");
-      }
-
-      // Update token dengan yang baru (verified)
-      if (res.data?.token) {
-        localStorage.setItem("auth_token", res.data.token);
-      }
-
+  const handleComplete = (_result: BiometricCompleteResponse) => {
       // ✅ Set flag: dashboard harus auto-load matched photos
       // Flag ini dibaca oleh UserDashboard & PhotoGallery saat pertama mount
       sessionStorage.setItem("auto_match_photos", "true");
@@ -58,14 +42,6 @@ const RegisterFace = () => {
         // Langsung ke gallery dengan flag auto-match
         navigate("/user/photos", { state: { autoMatch: true } });
       }
-    } catch (error: any) {
-      toast({
-        title: "Upload gagal",
-        description: error.message,
-        variant: "destructive",
-      });
-      setIsProcessing(false);
-    }
   };
 
   const handleSkip = () => {
@@ -123,11 +99,7 @@ const RegisterFace = () => {
               </span>
             </div>
 
-            <FaceCamera
-              onCapture={handleCapture}
-              mode="register"
-              isProcessing={isProcessing}
-            />
+            <BiometricLivenessScan onComplete={handleComplete} />
 
             {/* What happens next */}
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm">
@@ -156,7 +128,6 @@ const RegisterFace = () => {
               variant="ghost"
               className="w-full text-muted-foreground text-sm"
               onClick={handleSkip}
-              disabled={isProcessing}
             >
               Lewati, daftarkan nanti
             </Button>

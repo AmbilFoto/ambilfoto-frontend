@@ -157,13 +157,7 @@ export const authService = {
     return response.data;
   },
 
-  /**
-   * ✅ BARU — sebelumnya ForgotPassword.tsx manggil authApi.post() langsung
-   * dari komponen (nggak konsisten sama pola method lain di authService).
-   * Cocok dengan backend RequestPasswordReset: selalu balikin
-   * { success: true } apapun hasilnya (anti email-enumeration), jadi
-   * jangan expect field lain selain success/message di sini.
-   */
+  /** Requests a password reset link without revealing whether the email exists. */
   async requestPasswordReset(
     email: string
   ): Promise<{ success: boolean; message?: string }> {
@@ -171,19 +165,13 @@ export const authService = {
     return response.data;
   },
 
-  /**
-   * ✅ BARU — pasangan dari requestPasswordReset di atas, buat step
-   * konfirmasi (masukin OTP + password baru). Cocok dengan backend
-   * ConfirmPasswordReset: butuh email, otp, dan new_password.
-   */
+  /** Completes password reset with the single-use token from the email link. */
   async confirmPasswordReset(
-    email: string,
-    otp: string,
+    token: string,
     newPassword: string
   ): Promise<{ success: boolean; message?: string; error?: string }> {
     const response = await authApi.post('/auth/password/reset/confirm', {
-      email,
-      otp,
+      token,
       new_password: newPassword,
     });
     return response.data;

@@ -810,6 +810,7 @@ const PhotoGallery = () => {
                   onToggleFavorite={() => handleToggleFavorite(photo)}
                   isDownloading={downloadingIds.has(photo.photo_id)}
                   onClick={() => handlePhotoClick(photo)}
+                  authenticatedPreview
                 />
               ))}
             </div>

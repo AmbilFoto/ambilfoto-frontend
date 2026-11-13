@@ -17,6 +17,7 @@ import {
   Heart,
 } from "lucide-react";
 import { UserPhoto } from "@/services/api/user.service";
+import { aiService } from "@/services/api/ai.service";
 import { cn } from "@/lib/utils";
 
 interface PhotoListItemProps {
@@ -46,8 +47,6 @@ export const PhotoListItem = ({
   const downloadId = isStandalone
     ? photo.photo_id
     : photo.event_photo_id || photo.photo_id;
-
-  const previewUrl = photo.preview_url;
 
   // Display info differs per type
   const primaryLabel = isStandalone
@@ -97,8 +96,9 @@ export const PhotoListItem = ({
           ) : (
             <>
               <AuthenticatedImage
-                src={previewUrl}
+                src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
                 alt={photo.filename}
+                loading="lazy"
                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}

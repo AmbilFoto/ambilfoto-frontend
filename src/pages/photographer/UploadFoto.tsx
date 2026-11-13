@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 // Fix Leaflet default marker icon (webpack/vite breaks asset paths)
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+Reflect.deleteProperty(L.Icon.Default.prototype, "_getIconUrl");
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -39,6 +39,38 @@ interface PreviewFile {
   preview: string;
   base64: string;
 }
+
+const createPreviewFile = async (file: File): Promise<PreviewFile> => {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close();
+    throw new Error("Browser tidak dapat memproses foto");
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const previewBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("Gagal membuat preview foto")),
+      "image/jpeg",
+      0.78,
+    );
+  });
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Gagal membaca preview foto"));
+    reader.readAsDataURL(previewBlob);
+  });
+
+  return { file, preview: URL.createObjectURL(previewBlob), base64 };
+};
 
 interface LocationSuggestion {
   place_id: string;
@@ -94,6 +126,7 @@ const UploadPhoto = () => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewURLsRef = useRef(new Set<string>());
 
   const [previews, setPreviews] = useState<PreviewFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -111,10 +144,15 @@ const UploadPhoto = () => {
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  useEffect(() => () => {
+    previewURLsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
   // ── Location Search ───────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isStandalone) return;
+    if (selectedLocation?.placeName === locationQuery) return;
     if (!locationQuery || locationQuery.length < 3) {
       setLocationSuggestions([]);
       setShowSuggestions(false);
@@ -147,7 +185,7 @@ const UploadPhoto = () => {
     return () => {
       if (locationDebounceRef.current) clearTimeout(locationDebounceRef.current);
     };
-  }, [locationQuery, isStandalone]);
+  }, [locationQuery, isStandalone, selectedLocation]);
 
   const handleSelectLocation = (suggestion: LocationSuggestion) => {
     const loc: SelectedLocation = {
@@ -179,20 +217,21 @@ const UploadPhoto = () => {
       toast({ title: "Maks. 20 foto sekaligus", variant: "destructive" });
     }
 
-    const readers = allowed.map(
-      (file) =>
-        new Promise<PreviewFile>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const base64 = (ev.target?.result as string) || "";
-            resolve({ file, preview: URL.createObjectURL(file), base64 });
-          };
-          reader.readAsDataURL(file);
-        })
-    );
+    void Promise.allSettled(allowed.map(createPreviewFile)).then((results) => {
+      const completed = results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      completed.forEach((preview) => previewURLsRef.current.add(preview.preview));
+      setPreviews((prev) => [...prev, ...completed]);
 
-    Promise.all(readers).then((results) => {
-      setPreviews((prev) => [...prev, ...results]);
+      const failedCount = results.length - completed.length;
+      if (failedCount > 0) {
+        toast({
+          title: `${failedCount} foto tidak dapat diproses`,
+          description: "Gunakan format JPG, PNG, atau WebP.",
+          variant: "destructive",
+        });
+      }
     });
 
     e.target.value = "";
@@ -201,6 +240,7 @@ const UploadPhoto = () => {
   const removePreview = (index: number) => {
     setPreviews((prev) => {
       URL.revokeObjectURL(prev[index].preview);
+      previewURLsRef.current.delete(prev[index].preview);
       return prev.filter((_, i) => i !== index);
     });
   };
@@ -239,7 +279,7 @@ const UploadPhoto = () => {
             price_cash: pricing.is_for_sale ? pricing.price_cash : 0,
             is_for_sale: pricing.is_for_sale,
             extract_gps: false,
-          } as any);
+          });
 
           if (response.success) { successCount++; setUploadedCount(successCount); }
         } else {
@@ -249,7 +289,7 @@ const UploadPhoto = () => {
             upload_order: i + 1,
             price_cash: pricing.is_for_sale ? pricing.price_cash : 0,
             is_for_sale: pricing.is_for_sale,
-          } as any);
+          });
 
           if (response.success) { successCount++; setUploadedCount(successCount); }
         }
@@ -301,8 +341,8 @@ const UploadPhoto = () => {
             </CardTitle>
             <CardDescription>
               {isStandalone
-                ? "Upload foto standalone dengan lokasi dan atur harga"
-                : "Upload foto ke event dan atur harga untuk foto Anda"}
+                ? "Upload foto standalone dengan lokasi dan atur harga. Yang disimpan sekarang hanya preview."
+                : "Upload foto ke event dan atur harga. Yang disimpan sekarang hanya preview."}
             </CardDescription>
           </CardHeader>
 
@@ -343,6 +383,7 @@ const UploadPhoto = () => {
                     className="text-xs text-red-500 hover:text-red-700"
                     onClick={() => {
                       previews.forEach((p) => URL.revokeObjectURL(p.preview));
+                      previews.forEach((p) => previewURLsRef.current.delete(p.preview));
                       setPreviews([]);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}

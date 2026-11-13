@@ -18,7 +18,7 @@ const normalisePhoto = (photo: UserPhoto): UserPhoto => ({
   ...photo,
   event_photo_id: photo.event_photo_id || photo.photo_id,
   photo_id: photo.photo_id || photo.event_photo_id,
-  type: photo.type || "event",
+  type: photo.type || (photo.event_id ? "event" : "standalone"),
 });
 
 export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
@@ -35,24 +35,11 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
   const pollCountRef = useRef(0);
   const MAX_POLLS = 12; // 12 × 5s = 60 detik
 
-  // ── Gabungkan event + standalone ──────────────────────────────
+  // ── Matches from biometric enrollment ─────────────────────────
   const fetchAllPhotos = useCallback(async (): Promise<UserPhoto[]> => {
-    const [eventRes, standaloneRes] = await Promise.all([
-      userService.getMyPhotos({ limit: 100 }),
-      userService.getMyStandalonePhotos({ limit: 100 }),
-    ]);
-
-    const eventPhotos: UserPhoto[] =
-      eventRes.success && eventRes.data
-        ? eventRes.data.map(normalisePhoto)
-        : [];
-
-    const standalonePhotos: UserPhoto[] =
-      standaloneRes.success && standaloneRes.data
-        ? standaloneRes.data.map(normalisePhoto)
-        : [];
-
-    return [...eventPhotos, ...standalonePhotos];
+    const response = await userService.getMyPhotos({ limit: 200 });
+    if (!response.success) throw new Error(response.error || "Gagal memuat foto");
+    return (response.data || []).map(normalisePhoto);
   }, []);
 
   // ── Step 1: Ambil cache dari DB (instant) ─────────────────────
@@ -79,79 +66,26 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
     }
   }, [fetchAllPhotos, autoRefresh]);
 
-  // ── Step 2: Trigger AI background match (pakai embedding dari sessionStorage) ──
-  const triggerBackgroundMatch = useCallback(async () => {
-    try {
-      // FIX #1: Ambil embedding yang disimpan saat scan wajah
-      const embeddingRaw = sessionStorage.getItem("face_embedding");
-      const userId = sessionStorage.getItem("user_id") ||
-        JSON.parse(localStorage.getItem("user_data") || "{}").id;
-
-      if (!embeddingRaw || !userId) {
-        // Tidak ada embedding → tidak bisa trigger AI match
-        // Tetap update state supaya tidak stuck di "searching"
-        if (isMountedRef.current) {
-          setMatchState((prev) => prev === "searching" ? "empty" : prev);
-        }
-        return;
-      }
-
-      const embedding = JSON.parse(embeddingRaw);
-
-      // Panggil endpoint AI Python yang melakukan face matching
-      await userService.matchMyPhotos({ embedding, user_id: userId });
-
-      // Setelah AI selesai, langsung reload foto (tidak perlu tunggu polling)
-      if (!isMountedRef.current) return;
-
-      const merged = await fetchAllPhotos();
-      if (!isMountedRef.current) return;
-
-      const newCount = merged.length - prevCountRef.current;
-      if (newCount > 0) {
-        setNewPhotosCount(newCount);
-        setShowNewBanner(true);
-      }
-
-      setPhotos(merged);
-      prevCountRef.current = merged.length;
-      setMatchState(merged.length > 0 ? "found" : "empty");
-
-      // Stop polling — sudah dapat hasil dari AI langsung
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    } catch (err) {
-      console.error("Background match error:", err);
-      // Tetap update state supaya tidak stuck di "searching"
-      if (isMountedRef.current) {
-        setMatchState((prev) => prev === "searching" ? "empty" : prev);
-      }
-    }
-  }, [fetchAllPhotos]);
-
-  // ── Step 3: Polling — fallback jika triggerBackgroundMatch gagal ─
+  // ── Step 2: Poll for matches saved by biometric enrollment or upload events ─
   const checkForNewPhotos = useCallback(async () => {
     try {
-      // FIX #2: Hitung total event + standalone
-      const [eventRes, standaloneRes] = await Promise.all([
-        userService.getMyPhotos({ page: 1, limit: 1 }),
-        userService.getMyStandalonePhotos({ page: 1, limit: 1 }),
-      ]);
+      const currentPhotos = await fetchAllPhotos();
 
       if (!isMountedRef.current) return;
 
-      const eventTotal = eventRes.pagination?.total ?? 0;
-      const standaloneTotal = standaloneRes.pagination?.total ?? 0;
-      const currentCount = eventTotal + standaloneTotal;
+      const currentCount = currentPhotos.length;
 
       if (currentCount > prevCountRef.current) {
         const diff = currentCount - prevCountRef.current;
         setNewPhotosCount(diff);
         setShowNewBanner(true);
-        // Stop polling — sudah ada foto baru
-        if (pollingRef.current) clearInterval(pollingRef.current);
+        setPhotos(currentPhotos);
+        prevCountRef.current = currentCount;
+        setMatchState("found");
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
         return;
       }
 
@@ -166,7 +100,7 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
     } catch {
       // Abaikan error polling
     }
-  }, []);
+  }, [fetchAllPhotos]);
 
   // ── Step 4: User klik banner → reload daftar ─────────────────
   const reloadPhotos = useCallback(async () => {
@@ -201,13 +135,7 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
     loadCached();
 
     if (autoRefresh) {
-      // Step 2: Trigger AI matching langsung (pakai embedding dari sessionStorage)
-      // Sedikit delay supaya loadCached selesai dulu
-      const matchTimeout = setTimeout(() => {
-        if (isMountedRef.current) triggerBackgroundMatch();
-      }, 500);
-
-      // Step 3: Polling sebagai fallback (jika AI match endpoint tidak tersedia)
+      // Liveness enrollment already triggers matching; only poll for its result.
       const startPollingAfter = setTimeout(() => {
         if (!isMountedRef.current) return;
         pollingRef.current = setInterval(checkForNewPhotos, 5000);
@@ -215,7 +143,6 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
 
       return () => {
         isMountedRef.current = false;
-        clearTimeout(matchTimeout);
         clearTimeout(startPollingAfter);
         if (pollingRef.current) clearInterval(pollingRef.current);
       };
@@ -225,7 +152,7 @@ export function useMyPhotos(autoRefresh = false): UseMyPhotosReturn {
       isMountedRef.current = false;
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, []);
+  }, [autoRefresh, checkForNewPhotos, loadCached]);
 
   return {
     photos,

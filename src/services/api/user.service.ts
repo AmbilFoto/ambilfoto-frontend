@@ -266,6 +266,13 @@ export const userService = {
     return response.data;
   },
 
+  async getPhotoPreviewBlob(photoId: string): Promise<Blob> {
+    const response = await userApi.get(`/user/photos/${photoId}/preview`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   // ── Combined feed: event + standalone merged ──────────────────────────────────
   // Fetches both in parallel and returns a single sorted array.
   async getMyAllPhotos(params?: {

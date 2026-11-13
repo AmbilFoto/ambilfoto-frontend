@@ -161,6 +161,8 @@ export interface UploadPhotoData {
   face_image: string;
   filename: string;
   upload_order?: number;
+  price_cash?: number;
+  is_for_sale?: boolean;
 }
 
 export interface PhotoSaleRecord {
@@ -304,6 +306,7 @@ export interface UploadStandalonePhotoData {
   groupPrice?: number;
   price_cash?: number;
   price_points?: number;
+  is_for_sale?: boolean;
   visibility?: StandaloneVisibility;
   category?: StandaloneCategory;
   extract_gps?: boolean;
@@ -311,6 +314,7 @@ export interface UploadStandalonePhotoData {
 
 export interface StandalonePhoto {
   photo_id: string;
+  id?: string;
   ai_photo_id: string;
   filename: string;
   photographer_id: string;
@@ -330,6 +334,7 @@ export interface StandalonePhoto {
   created_at: string;
   preview_url: string;
   download_url?: string | null;
+  original_uploaded?: boolean;
   matched_users?: number;
   total_purchases?: number;
   total_revenue?: number;
@@ -607,13 +612,33 @@ export const photographerService = {
 
     // Normalisasi: backend return `id`, frontend butuh `photo_id`
     if (res.success && Array.isArray(res.data)) {
-      res.data = res.data.map((p: any) => ({
-        ...p,
-        photo_id: p.photo_id ?? p.id,
+      res.data = res.data.map((photo) => ({
+        ...photo,
+        photo_id: photo.photo_id ?? photo.id ?? "",
       }));
     }
 
     return res;
+  },
+
+  async uploadOriginalPhoto(photoId: string, file: File): Promise<{
+    success: boolean;
+    data?: { photo_id: string; original_uploaded: boolean };
+    error?: string;
+  }> {
+    const formData = new FormData();
+    formData.append("photo", file);
+    const response = await photographerApi.post(`/photos/${photoId}/original`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
+  async getPhotoPreviewBlob(photoId: string): Promise<Blob> {
+    const response = await photographerApi.get(`/photos/${photoId}/content`, {
+      responseType: "blob",
+    });
+    return response.data;
   },
 
   async updateStandalonePhoto(

@@ -42,7 +42,6 @@ export const PhotoDetailModal = ({
 
   const matchPercentage = photo.similarity ? Math.round(photo.similarity * 100) : 0;
   
-  const previewUrl = photo.preview_url;
   const photoId = photo.event_photo_id || photo.photo_id;
   const eventName = photo.event_name || 'Untitled Photo';
   const eventDate = photo.event_date;
@@ -95,7 +94,7 @@ export const PhotoDetailModal = ({
           {/* Image Preview */}
           <div className="relative aspect-[4/3] bg-muted overflow-hidden">
             <AuthenticatedImage
-              src={previewUrl}
+              src={photo.preview_url || aiService.getPreviewUrl(photo.photo_id)}
               alt={photo.filename}
               className="w-full h-full object-cover"
             />

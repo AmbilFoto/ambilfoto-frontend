@@ -46,15 +46,13 @@ const ForgotPassword = () => {
           description: "Silakan cek email Anda untuk instruksi reset password.",
         });
 
-        // Save email for resend functionality
-        sessionStorage.setItem('reset_email', email.trim());
       }
     } catch (error: any) {
       console.error('Password reset request error:', error);
       
       // Even on error, show success message (anti-enumeration)
       // But show actual error in development
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         toast({
           title: "Error",
           description: error.response?.data?.error || "Terjadi kesalahan. Silakan coba lagi.",
@@ -75,7 +73,6 @@ const ForgotPassword = () => {
 
   const handleResend = () => {
     setSent(false);
-    setEmail(sessionStorage.getItem('reset_email') || '');
   };
 
   if (sent) {

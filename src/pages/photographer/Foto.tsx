@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -185,14 +186,71 @@ const SourceBadge = ({ photo }: { photo: StandalonePhoto }) => {
   );
 };
 
+const OriginalUploadAction = ({ photo, onUploaded }: {
+  photo: StandalonePhoto;
+  onUploaded: (photoId: string) => void;
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const result = await photographerService.uploadOriginalPhoto(photo.photo_id, file);
+      if (!result.success) throw new Error(result.error || "Original gagal diunggah");
+      onUploaded(photo.photo_id);
+      toast.success("Original foto berhasil diunggah");
+    } catch (error: unknown) {
+      const message = axios.isAxiosError<{ error?: string }>(error)
+        ? error.response?.data?.error || error.message
+        : error instanceof Error ? error.message : "Original gagal diunggah";
+      toast.error(message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (photo.original_uploaded) {
+    return <p className="mt-2 text-xs font-medium text-emerald-700">Original siap diunduh</p>;
+  }
+
+  return (
+    <div className="mt-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFile}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+        {uploading ? "Mengunggah original..." : "Upload original"}
+      </Button>
+    </div>
+  );
+};
+
 // ─── Grid Card ────────────────────────────────────────────────────────────────
 
 const PhotoGridCard = ({
-  photo, onEdit, onDelete,
+  photo, onEdit, onDelete, onOriginalUploaded,
 }: {
   photo: StandalonePhoto;
   onEdit: (p: StandalonePhoto) => void;
   onDelete: (p: StandalonePhoto) => void;
+  onOriginalUploaded: (photoId: string) => void;
 }) => {
   const isStandalone = photo.source === "standalone";
 
@@ -270,6 +328,7 @@ const PhotoGridCard = ({
             {photo.event_name}
           </p>
         )}
+        <OriginalUploadAction photo={photo} onUploaded={onOriginalUploaded} />
       </CardContent>
     </Card>
   );
@@ -278,11 +337,12 @@ const PhotoGridCard = ({
 // ─── List Row ─────────────────────────────────────────────────────────────────
 
 const PhotoListRow = ({
-  photo, onEdit, onDelete,
+  photo, onEdit, onDelete, onOriginalUploaded,
 }: {
   photo: StandalonePhoto;
   onEdit: (p: StandalonePhoto) => void;
   onDelete: (p: StandalonePhoto) => void;
+  onOriginalUploaded: (photoId: string) => void;
 }) => {
   const isStandalone = photo.source === "standalone";
 
@@ -346,6 +406,7 @@ const PhotoListRow = ({
             </div>
           )}
         </div>
+        <OriginalUploadAction photo={photo} onUploaded={onOriginalUploaded} />
       </CardContent>
     </Card>
   );
@@ -452,6 +513,12 @@ export default function PhotographerMyPhotos() {
     } catch {
       toast.error("Gagal menghapus foto");
     }
+  };
+
+  const handleOriginalUploaded = (photoId: string) => {
+    setPhotos((previous) => previous.map((photo) =>
+      photo.photo_id === photoId ? { ...photo, original_uploaded: true } : photo
+    ));
   };
 
   const filtered = photos
@@ -673,7 +740,13 @@ export default function PhotographerMyPhotos() {
           {!loading && filtered.length > 0 && viewMode === "grid" && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filtered.map(photo => (
-                <PhotoGridCard key={photo.photo_id} photo={photo} onEdit={setEditPhoto} onDelete={setDeletePhoto} />
+                <PhotoGridCard
+                  key={photo.photo_id}
+                  photo={photo}
+                  onEdit={setEditPhoto}
+                  onDelete={setDeletePhoto}
+                  onOriginalUploaded={handleOriginalUploaded}
+                />
               ))}
             </div>
           )}
@@ -682,7 +755,13 @@ export default function PhotographerMyPhotos() {
           {!loading && filtered.length > 0 && viewMode === "list" && (
             <div className="space-y-3">
               {filtered.map(photo => (
-                <PhotoListRow key={photo.photo_id} photo={photo} onEdit={setEditPhoto} onDelete={setDeletePhoto} />
+                <PhotoListRow
+                  key={photo.photo_id}
+                  photo={photo}
+                  onEdit={setEditPhoto}
+                  onDelete={setDeletePhoto}
+                  onOriginalUploaded={handleOriginalUploaded}
+                />
               ))}
             </div>
           )}
