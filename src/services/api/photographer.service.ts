@@ -130,9 +130,9 @@ export interface PhotographerProfile {
   email: string;
   phone?: string;
   profile_photo?: string;
-  province_id?: string | null;
+  province_id?: string | number | null;
   province_name?: string | null;
-  city_id?: string | null;
+  city_id?: string | number | null;
   city_name?: string | null;
   location_updated_at?: string | null;
   created_at: string;
@@ -154,18 +154,6 @@ export interface PhotographerStats {
   };
   users?: {
     unique_users: number;
-  };
-}
-
-export interface ProfileCompletion {
-  is_complete: boolean;
-  missing_fields: string[];
-  current_data: {
-    province_id: string | number | null;
-    province_name: string | null;
-    city_id: string | number | null;
-    city_name: string | null;
-    business_name?: string;
   };
 }
 
@@ -280,12 +268,13 @@ export interface City {
 }
 
 export interface LocationUpdateResponse {
-  province_id: string;
-  province_name: string;
-  city_id: string;
-  city_name: string;
+  province_id: string | number;
+  province_name: string | null;
+  city_id: string | number;
+  city_name: string | null;
 }
 
+// Single source of truth (jangan dideklarasikan lagi di tempat lain)
 export interface ProfileCompletion {
   is_complete: boolean;
   missing_fields: string[];
@@ -351,7 +340,7 @@ export interface StandalonePhoto {
   total_purchases?: number;
   total_revenue?: number;
 
-  // ← Fields baru dari getMyAllPhotos
+  // Fields baru dari getMyAllPhotos
   source: 'standalone' | 'event';
   event_id?: string | null;
   event_name?: string | null;
@@ -609,7 +598,7 @@ export const photographerService = {
     return response.data;
   },
 
-    async getMyAllPhotos(params?: {
+  async getMyAllPhotos(params?: {
     page?: number;
     limit?: number;
     source?: 'standalone' | 'event';
@@ -628,9 +617,9 @@ export const photographerService = {
 
     // Normalisasi: backend return `id`, frontend butuh `photo_id`
     if (res.success && Array.isArray(res.data)) {
-      res.data = res.data.map((photo) => ({
+      res.data = res.data.map((photo: any) => ({
         ...photo,
-        photo_id: photo.photo_id ?? photo.id ?? "",
+        photo_id: photo.photo_id ?? photo.id ?? '',
       }));
     }
 
@@ -643,16 +632,16 @@ export const photographerService = {
     error?: string;
   }> {
     const formData = new FormData();
-    formData.append("photo", file);
+    formData.append('photo', file);
     const response = await photographerApi.post(`/photos/${photoId}/original`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
 
   async getPhotoPreviewBlob(photoId: string): Promise<Blob> {
     const response = await photographerApi.get(`/photos/${photoId}/content`, {
-      responseType: "blob",
+      responseType: 'blob',
     });
     return response.data;
   },
