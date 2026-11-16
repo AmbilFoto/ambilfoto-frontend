@@ -657,8 +657,8 @@ const Index = () => {
             <div className="event-card-anim">
               <EventCard
                 logos={[
-                  "https://res.cloudinary.com/viecqvpk/image/upload/q_auto/f_auto/v1786581021/bayanopen-logo_mfcb55_rk41oh.webp",
-                  "https://res.cloudinary.com/viecqvpk/image/upload/v1789114756/LOGO_EVENT_Bayan_2026_jolyfx.png",
+                  "https://res.cloudinary.com/rdpygf90/image/upload/v1794819722/bayan-icon.png",
+                  "https://res.cloudinary.com/rdpygf90/image/upload/v1794819727/LOGO_EVENT_Bayan_2026.png",
                 ]}
                 title="Bayan Open & Craft Art Festival 2026"
                 subtitle="Turnamen Olahraga & Festival Seni · Balikpapan"
@@ -667,7 +667,7 @@ const Index = () => {
             </div>
             <div className="event-card-anim">
               <EventCard
-                logos={["https://res.cloudinary.com/ddeigqz5d/image/upload/v1790630020/LOGO_BR2026_vbixvo_w7hjua.webp"]}
+                logos={["https://res.cloudinary.com/rdpygf90/image/upload/v1794819796/LOGO_BR2026.webp"]}
                 title="Bayan Run 2026"
                 subtitle="Fun Run"
                 href="/event-public/bayan-run-2026"

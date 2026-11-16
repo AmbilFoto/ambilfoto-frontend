@@ -57,6 +57,14 @@ const MAX_CONCURRENT_PREVIEWS = 3;
    Blob yang sedang tampil (refs > 0) tidak pernah di-revoke. */
 const MAX_CACHED_PREVIEWS = 150;
 
+/* Persistent face-match metadata cache (IndexedDB). */
+const IDB_NAME = "ambilfoto_preview_cache";
+const IDB_STORE = "face_match_metadata";
+const IDB_VERSION = 1;
+const METADATA_SCHEMA_VERSION = 1;
+/* Harus sama dengan METADATA_VERSION di backend. Naikkan jika sistem koordinat berubah. */
+const METADATA_VERSION = "face-match-v1";
+
 /* Buka halaman dengan ?debugFaces=1 untuk melihat sumber preview & jumlah kotak per foto. */
 const DEBUG_FACES =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debugFaces");
@@ -95,6 +103,25 @@ interface Photo {
   metadata?: PhotoMeta;
 }
 
+type FaceBox = [number, number, number, number];
+
+/* Record persisten di IndexedDB (tanpa embedding / data biometrik mentah). */
+interface FaceMatchMetadata {
+  cacheKey: string;
+  userId: string;
+  photoId: string;
+  filename: string;
+
+  width: number;
+  height: number;
+
+  matchedFaces: FaceBox[];
+
+  schemaVersion: number;
+  metadataVersion: string;
+  cachedAt: number;
+}
+
 interface PreviewAsset {
   src: string;
   source: "cdn" | "fallback";
@@ -106,19 +133,14 @@ interface PreviewAsset {
 interface PreviewPayload {
   bytes: ArrayBuffer;
   source: "cdn" | "fallback";
-  matchedFaces: number[][];
-  width: number | null;
-  height: number | null;
+  metadata: FaceMatchMetadata | null;
 }
 
-/* Metadata ringan (bukan bytes gambar) agar re-load cepat */
+/* Metadata ringan untuk mengambil bytes gambar (URL CDN + kunci). Bukan koordinat wajah. */
 interface PreviewMeta {
   url: string;
   wrappedDek: string;
   fileNonce: string;
-  matchedFaces: number[][];
-  width: number | null;
-  height: number | null;
 }
 
 /* ═══════════════ TANGGAL: normalisasi, label, sorting ═══════════════ */
@@ -183,9 +205,244 @@ function sortPhotosByDate(photos: Photo[]): Photo[] {
     .map((x) => x.photo);
 }
 
+/* ═══════════════ FACE-MATCH METADATA CACHE: memori -> IndexedDB -> API ═══════════════
+   - Server tetap menjadi sumber kebenaran (deteksi, validasi, otorisasi).
+   - Client hanya menyimpan koordinat + dimensi dan menggambar SVG overlay.
+   - Tidak menyimpan embedding, private key, atau gambar plaintext. */
+
+const faceMetadataCache = new Map<string, FaceMatchMetadata>();
+const faceMetadataReadInflight = new Map<string, Promise<FaceMatchMetadata | null>>();
+let idbPromise: Promise<IDBDatabase | null> | null = null;
+
+function buildFaceCacheKey(userId: string, photoId: string): string {
+  return `${userId}:${photoId}:${METADATA_VERSION}`;
+}
+
+function isValidBox(value: unknown): value is FaceBox {
+  if (!Array.isArray(value) || value.length !== 4) return false;
+  if (!value.every((n) => typeof n === "number" && Number.isFinite(n))) return false;
+  const [x1, y1, x2, y2] = value as number[];
+  return x2 > x1 && y2 > y1;
+}
+
+function isValidFaceMetadata(
+  record: unknown,
+  userId: string,
+  photoId: string
+): record is FaceMatchMetadata {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Partial<FaceMatchMetadata>;
+  return (
+    r.schemaVersion === METADATA_SCHEMA_VERSION &&
+    r.metadataVersion === METADATA_VERSION &&
+    r.userId === userId &&
+    r.photoId === photoId &&
+    r.cacheKey === buildFaceCacheKey(userId, photoId) &&
+    typeof r.width === "number" && Number.isFinite(r.width) && r.width > 0 &&
+    typeof r.height === "number" && Number.isFinite(r.height) && r.height > 0 &&
+    Array.isArray(r.matchedFaces) &&
+    r.matchedFaces.length > 0 &&
+    r.matchedFaces.every(isValidBox)
+  );
+}
+
+function openFaceDb(): Promise<IDBDatabase | null> {
+  if (idbPromise) return idbPromise;
+  idbPromise = new Promise<IDBDatabase | null>((resolve) => {
+    try {
+      if (typeof indexedDB === "undefined") return resolve(null);
+      const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          const store = db.createObjectStore(IDB_STORE, { keyPath: "cacheKey" });
+          store.createIndex("userId", "userId", { unique: false });
+        }
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => {
+          db.close();
+          idbPromise = null;
+        };
+        resolve(db);
+      };
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return idbPromise;
+}
+
+function idbRequest<T>(
+  db: IDBDatabase,
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T> | void
+): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, mode);
+      const req = run(tx.objectStore(IDB_STORE));
+      let result: T | undefined;
+      if (req) req.onsuccess = () => { result = req.result; };
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => resolve(undefined);
+      tx.onabort = () => resolve(undefined);
+    } catch {
+      resolve(undefined);
+    }
+  });
+}
+
+async function idbGetFaceMetadata(cacheKey: string): Promise<unknown> {
+  const db = await openFaceDb();
+  if (!db) return null;
+  return (await idbRequest<unknown>(db, "readonly", (s) => s.get(cacheKey))) ?? null;
+}
+
+async function idbPutFaceMetadata(record: FaceMatchMetadata): Promise<void> {
+  const db = await openFaceDb();
+  if (!db) return;
+  await idbRequest(db, "readwrite", (s) => s.put(record));
+}
+
+async function idbDeleteFaceMetadata(cacheKey: string): Promise<void> {
+  const db = await openFaceDb();
+  if (!db) return;
+  await idbRequest(db, "readwrite", (s) => s.delete(cacheKey));
+}
+
+/** Hapus semua metadata milik satu user (reset data biometrik / logout). */
+async function clearFaceMetadataForUser(userId: string | null): Promise<void> {
+  for (const [key, record] of faceMetadataCache) {
+    if (!userId || record.userId === userId) faceMetadataCache.delete(key);
+  }
+  faceMetadataReadInflight.clear();
+
+  const db = await openFaceDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      const store = tx.objectStore(IDB_STORE);
+      if (!userId) {
+        store.clear();
+      } else {
+        const cursorReq = store.index("userId").openCursor(IDBKeyRange.only(userId));
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (cursor) {
+            cursor.delete();
+            cursor.continue();
+          }
+        };
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Lookup terpusat: cache memori -> IndexedDB. Return null kalau tidak ada / tidak valid
+ * (pemanggil lalu mengambil dari API). Pembacaan bersamaan untuk key yang sama di-dedupe.
+ */
+async function getFaceMatchMetadata(
+  userId: string,
+  photoId: string
+): Promise<FaceMatchMetadata | null> {
+  const cacheKey = buildFaceCacheKey(userId, photoId);
+
+  const inMemory = faceMetadataCache.get(cacheKey);
+  if (inMemory) return inMemory;
+
+  const pending = faceMetadataReadInflight.get(cacheKey);
+  if (pending) return pending;
+
+  const promise = (async () => {
+    try {
+      const record = await idbGetFaceMetadata(cacheKey);
+      if (!record) return null;
+      if (!isValidFaceMetadata(record, userId, photoId)) {
+        await idbDeleteFaceMetadata(cacheKey); // record rusak / versi lama -> buang
+        return null;
+      }
+      faceMetadataCache.set(cacheKey, record);
+      return record;
+    } catch {
+      return null;
+    }
+  })().finally(() => {
+    faceMetadataReadInflight.delete(cacheKey);
+  });
+
+  faceMetadataReadInflight.set(cacheKey, promise);
+  return promise;
+}
+
+/** Simpan ke memori + IndexedDB. Error storage tidak pernah menggagalkan galeri. */
+async function saveFaceMatchMetadata(record: FaceMatchMetadata): Promise<void> {
+  faceMetadataCache.set(record.cacheKey, record);
+  try {
+    await idbPutFaceMetadata(record);
+  } catch (error) {
+    console.warn("Gagal menyimpan metadata wajah ke IndexedDB:", error);
+  }
+}
+
+interface RawFaceMetadata {
+  matched_faces?: unknown;
+  preview_width?: unknown;
+  preview_height?: unknown;
+  metadata_version?: unknown;
+}
+
+/** Validasi respons API -> record siap simpan. null kalau data tidak lengkap / tidak valid. */
+function buildFaceMetadataFromApi(
+  userId: string,
+  photo: Photo,
+  raw: RawFaceMetadata
+): { record: FaceMatchMetadata; persist: boolean } | null {
+  const width = Number(raw.preview_width);
+  const height = Number(raw.preview_height);
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) return null;
+  if (!Array.isArray(raw.matched_faces) || raw.matched_faces.length === 0) return null;
+
+  const faces: FaceBox[] = [];
+  for (const box of raw.matched_faces) {
+    if (!Array.isArray(box) || box.length !== 4) return null;
+    const nums = box.map(Number);
+    if (!isValidBox(nums)) return null;
+    faces.push(nums as FaceBox);
+  }
+
+  return {
+    record: {
+      cacheKey: buildFaceCacheKey(userId, photo.photo_id),
+      userId,
+      photoId: photo.photo_id,
+      filename: photo.filename,
+      width,
+      height,
+      matchedFaces: faces,
+      schemaVersion: METADATA_SCHEMA_VERSION,
+      metadataVersion: METADATA_VERSION,
+      cachedAt: Date.now(),
+    },
+    // Versi server berbeda dengan client -> tetap dipakai untuk render, tapi tidak dipersist.
+    persist: raw.metadata_version === undefined || raw.metadata_version === METADATA_VERSION,
+  };
+}
+
 let deviceKeyPairPromise: Promise<CryptoKeyPair> | null = null;
 let activePreviewRequests = 0;
 const previewWaiters: Array<() => void> = [];
+/* Cache memori URL CDN + kunci terbungkus (sesi halaman saja; key pair device ikut hilang saat refresh). */
 const previewMetaCache = new Map<string, PreviewMeta>();
 
 async function acquirePreviewSlot(): Promise<() => void> {
@@ -276,45 +533,62 @@ async function decryptPreviewCiphertext(
 async function fetchPreviewViaMeta(
   meta: PreviewMeta,
   keyPair: CryptoKeyPair
-): Promise<PreviewPayload> {
+): Promise<ArrayBuffer> {
   const imageResponse = await fetch(meta.url, { cache: "force-cache" });
   if (!imageResponse.ok) {
     throw new Error(`CDN preview gagal (${imageResponse.status})`);
   }
-  const bytes = await decryptPreviewCiphertext(
+  return decryptPreviewCiphertext(
     await imageResponse.arrayBuffer(),
     meta.wrappedDek,
     meta.fileNonce,
     keyPair
   );
+}
+
+/** Metadata overlay dari header endpoint fallback (X-Matched-Faces, X-Preview-Width/Height, ...). */
+function readFallbackMetadata(response: Response): RawFaceMetadata {
+  let matchedFaces: unknown = [];
+  try {
+    matchedFaces = JSON.parse(response.headers.get("X-Matched-Faces") || "[]");
+  } catch {
+    matchedFaces = [];
+  }
   return {
-    bytes,
-    source: "cdn",
-    matchedFaces: meta.matchedFaces,
-    width: meta.width,
-    height: meta.height,
+    matched_faces: matchedFaces,
+    preview_width: response.headers.get("X-Preview-Width"),
+    preview_height: response.headers.get("X-Preview-Height"),
+    metadata_version: response.headers.get("X-Metadata-Version") ?? undefined,
   };
 }
 
 async function fetchPreviewBytes(
-  filename: string,
+  photo: Photo,
   userId: string,
   keyPair: CryptoKeyPair
 ): Promise<PreviewPayload> {
+  const { filename } = photo;
   const cacheKey = `${userId}:${filename}`;
 
-  // Pakai metadata cache (tanpa POST ulang)
+  // 1) Memori -> IndexedDB. Kalau valid, koordinat tidak diminta lagi dari API.
+  const stored = await getFaceMatchMetadata(userId, photo.photo_id);
+
+  // Cache URL CDN sesi ini (tanpa POST ulang) — hanya dipakai kalau metadata sudah ada.
   const cached = previewMetaCache.get(cacheKey);
-  if (cached) {
+  if (cached && stored) {
     try {
-      return await fetchPreviewViaMeta(cached, keyPair);
+      const bytes = await fetchPreviewViaMeta(cached, keyPair);
+      return { bytes, source: "cdn", metadata: stored };
     } catch (error) {
       // URL CDN mungkin kedaluwarsa -> buang cache, ulangi dari awal
       previewMetaCache.delete(cacheKey);
       console.warn("Preview meta cache tidak valid, meminta ulang:", error);
     }
+  } else if (cached) {
+    previewMetaCache.delete(cacheKey); // metadata belum ada -> satu request ke API
   }
 
+  // 2) API: endpoint CDN terenkripsi
   try {
     const keyResponse = await fetch(PREVIEW_CACHE_KEY_ENDPOINT(filename), {
       method: "POST",
@@ -331,18 +605,25 @@ async function fetchPreviewBytes(
         url: keyData.url,
         wrappedDek: keyData.wrapped_dek,
         fileNonce: keyData.file_nonce,
-        matchedFaces: Array.isArray(keyData.matched_faces) ? keyData.matched_faces : [],
-        width: Number.isFinite(keyData.preview_width) ? keyData.preview_width : null,
-        height: Number.isFinite(keyData.preview_height) ? keyData.preview_height : null,
       };
-      const payload = await fetchPreviewViaMeta(meta, keyPair);
+      const bytes = await fetchPreviewViaMeta(meta, keyPair);
       previewMetaCache.set(cacheKey, meta);
-      return payload;
+
+      let metadata = stored;
+      if (!metadata) {
+        const built = buildFaceMetadataFromApi(userId, photo, keyData);
+        if (built) {
+          metadata = built.record;
+          if (built.persist) await saveFaceMatchMetadata(built.record);
+        }
+      }
+      return { bytes, source: "cdn", metadata };
     }
   } catch (error) {
     console.warn("Encrypted CDN preview tidak tersedia, memakai fallback:", error);
   }
 
+  // 3) Fallback: preview terenkripsi dari server (metadata lewat header respons)
   const response = await fetch(PREVIEW_MATCH_ENDPOINT(filename), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -354,12 +635,19 @@ async function fetchPreviewBytes(
   if (!response.ok) {
     throw new Error("Personal preview gagal");
   }
+
+  let metadata = stored;
+  if (!metadata) {
+    const built = buildFaceMetadataFromApi(userId, photo, readFallbackMetadata(response));
+    if (built) {
+      metadata = built.record;
+      if (built.persist) await saveFaceMatchMetadata(built.record);
+    }
+  }
   return {
     bytes: await decryptEncryptedResponse(response, keyPair),
     source: "fallback",
-    matchedFaces: [],
-    width: null,
-    height: null,
+    metadata,
   };
 }
 
@@ -408,8 +696,8 @@ function clearPreviewAssets() {
 
 /* Dedupe: thumb & modal yang minta foto sama berbagi satu fetch.
    Kalau semua peminta sudah pergi sebelum dapat slot antrean, fetch dilewati. */
-function requestPreviewAsset(filename: string, userId: string): InflightPreview {
-  const key = `${userId}:${filename}`;
+function requestPreviewAsset(photo: Photo, userId: string): InflightPreview {
+  const key = `${userId}:${photo.filename}`;
 
   const existing = previewInflight.get(key);
   if (existing) {
@@ -428,14 +716,14 @@ function requestPreviewAsset(filename: string, userId: string): InflightPreview 
       if (inflight.waiters <= 0) throw PREVIEW_SKIPPED;
 
       const keyPair = await getDeviceKeyPair();
-      const payload = await fetchPreviewBytes(filename, userId, keyPair);
+      const payload = await fetchPreviewBytes(photo, userId, keyPair);
       const src = URL.createObjectURL(new Blob([payload.bytes], { type: "image/jpeg" }));
       return {
         src,
         source: payload.source,
-        matchedFaces: payload.matchedFaces,
-        width: payload.width,
-        height: payload.height,
+        matchedFaces: payload.metadata?.matchedFaces ?? [],
+        width: payload.metadata?.width ?? null,
+        height: payload.metadata?.height ?? null,
       } as PreviewAsset;
     } finally {
       release();
@@ -454,11 +742,12 @@ function requestPreviewAsset(filename: string, userId: string): InflightPreview 
  * sampai kena eviction LRU atau resetFaceData.
  */
 function usePersonalPreview(
-  filename: string,
+  photo: Photo,
   userId: string | null,
   enabled = true
 ) {
   const [preview, setPreview] = useState<PreviewAsset | null>(null);
+  const { filename, photo_id: photoId } = photo;
 
   useEffect(() => {
     // Tidak aktif / keluar viewport: kosongkan state (bebaskan decode gambar di DOM),
@@ -486,7 +775,7 @@ function usePersonalPreview(
       hold(cached); // instan, tanpa loading
     } else {
       setPreview(null);
-      inflight = requestPreviewAsset(filename, userId);
+      inflight = requestPreviewAsset({ ...photo, filename, photo_id: photoId }, userId);
       inflight.promise
         .then((asset) => {
           settled = true;
@@ -512,7 +801,8 @@ function usePersonalPreview(
       if (inflight && !settled) inflight.waiters = Math.max(0, inflight.waiters - 1);
       evictPreviews();
     };
-  }, [enabled, filename, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, filename, photoId, userId]);
 
   return preview;
 }
@@ -565,7 +855,7 @@ function PersonalPreviewImage({
   className: string;
 }) {
   // Modal: pakai cache bersama dengan thumb (instan kalau thumb sudah ter-load)
-  const preview = usePersonalPreview(photo.filename, userId);
+  const preview = usePersonalPreview(photo, userId);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const imageLoaded = preview !== null && loadedSrc === preview.src;
 
@@ -594,7 +884,7 @@ function PhotoThumb({
   const containerRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
-  const preview = usePersonalPreview(photo.filename, userId, inView);
+  const preview = usePersonalPreview(photo, userId, inView);
   const imageLoaded = preview !== null && loadedSrc === preview.src;
 
   // Lazy load saat masuk viewport. Keluar viewport hanya melepas referensi,
@@ -817,16 +1107,19 @@ const EventPublicBayanRun2026 = () => {
 
   const resetFaceData = useCallback(() => {
     if (!window.confirm("Ulangi pencarian wajah? Data verifikasi yang tersimpan akan dihapus dari perangkat ini.")) return;
+    const currentUserId = userId;
     localStorage.removeItem(STORAGE_KEY);
     previewMetaCache.clear();
     clearPreviewAssets();
+    // Hapus metadata wajah persisten (memori + IndexedDB) milik user ini.
+    void clearFaceMetadataForUser(currentUserId);
     setUserId(null);
     setAllPhotos([]);
     setCurrentDay("all");
     setModalIndex(null);
     setGallerySearched(false);
     setStatusMsg(null);
-  }, []);
+  }, [userId]);
 
   /* Bersihkan semua blob saat halaman ditinggalkan (unmount) */
   useEffect(() => {
