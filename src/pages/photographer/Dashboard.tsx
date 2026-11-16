@@ -221,7 +221,7 @@ const PhotographerDashboard = () => {
                       <Calendar className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{stats?.events.total_events || 0}</p>
+                      <p className="text-2xl font-bold">{stats?.events?.total_events ?? events.length}</p>
                       <p className="text-sm text-muted-foreground">Total Acara</p>
                     </div>
                   </div>
@@ -235,7 +235,7 @@ const PhotographerDashboard = () => {
                       <Image className="h-5 w-5 text-violet-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{stats?.photos.total_photos || 0}</p>
+                      <p className="text-2xl font-bold">{stats?.photos?.total_photos || 0}</p>
                       <p className="text-sm text-muted-foreground">Foto Diunggah</p>
                     </div>
                   </div>
@@ -249,7 +249,7 @@ const PhotographerDashboard = () => {
                       <Users className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{stats?.photos.total_faces_detected || 0}</p>
+                      <p className="text-2xl font-bold">{stats?.photos?.total_faces_detected || 0}</p>
                       <p className="text-sm text-muted-foreground">Wajah Terdeteksi</p>
                     </div>
                   </div>
@@ -484,11 +484,11 @@ const PhotographerDashboard = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-3xl font-bold">{stats?.users.unique_users || 0}</p>
+                  <p className="text-3xl font-bold">{stats?.users?.unique_users || 0}</p>
                   <p className="text-sm text-muted-foreground">Pengguna unik tercocokkan</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold">{stats?.events.active_events || 0}</p>
+                  <p className="text-3xl font-bold">{stats?.events?.active_events ?? events.filter((event) => event.status === 'active').length}</p>
                   <p className="text-sm text-muted-foreground">Acara aktif</p>
                 </div>
               </div>
@@ -511,7 +511,7 @@ const PhotographerDashboard = () => {
                   <p className="text-sm text-muted-foreground">Total pendapatan</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold">{stats?.events.completed_events || 0}</p>
+                  <p className="text-3xl font-bold">{stats?.events?.completed_events ?? events.filter((event) => event.status === 'completed').length}</p>
                   <p className="text-sm text-muted-foreground">Acara selesai</p>
                 </div>
               </div>

@@ -112,8 +112,10 @@ export interface UserRequestHistory {
 export interface SubmitUpgradeData {
   ktp_number: string;
   ktp_name: string;
-  ktp_photo: string; // base64
-  face_photo: string; // base64
+  ktp_photo?: string;
+  face_photo?: string;
+  ktp_photo_key?: string;
+  face_photo_key?: string;
   business_name: string;
   business_address: string;
   business_phone: string;
@@ -137,6 +139,45 @@ export interface ApiResponse<T> {
 // =====================
 
 export const photographerUpgradeService = {
+  async uploadUpgradePhotos(ktpPhoto: string, facePhoto: string): Promise<{
+    ktp_photo_key: string;
+    face_photo_key: string;
+  }> {
+    const [ktpBlob, faceBlob] = await Promise.all([
+      fetch(ktpPhoto).then((response) => response.blob()),
+      fetch(facePhoto).then((response) => response.blob()),
+    ]);
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!supportedTypes.includes(ktpBlob.type) || !supportedTypes.includes(faceBlob.type)) {
+      throw new Error('Gunakan foto JPEG, PNG, atau WebP.');
+    }
+    const uploadResponse = await api.post('/auth/upgrade-photos/upload-urls', {
+      ktp_content_type: ktpBlob.type,
+      face_content_type: faceBlob.type,
+    });
+    const upload = uploadResponse.data.data;
+
+    const [ktpUpload, faceUpload] = await Promise.all([
+      fetch(upload.ktp_upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': ktpBlob.type },
+        body: ktpBlob,
+      }),
+      fetch(upload.face_upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': faceBlob.type },
+        body: faceBlob,
+      }),
+    ]);
+    if (!ktpUpload.ok || !faceUpload.ok) {
+      throw new Error('Gagal mengunggah foto ke storage. Silakan coba lagi.');
+    }
+    return {
+      ktp_photo_key: upload.ktp_photo_key,
+      face_photo_key: upload.face_photo_key,
+    };
+  },
+
   /**
    * USER: Submit photographer upgrade request (with location support)
    */

@@ -108,8 +108,23 @@ const PhotographerUpgradeRequest = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const ktpNumber = formData.ktp_number.trim();
+    const ktpName = formData.ktp_name.trim();
+    const businessName = formData.business_name.trim();
+    const businessAddress = formData.business_address.trim();
+    const businessPhone = formData.business_phone.trim();
+
     // Validation
-    if (!validateKtpNumber(formData.ktp_number)) {
+    if (!ktpName || !businessName || !businessAddress || !businessPhone) {
+      toast({
+        title: "Error",
+        description: "Nama KTP dan semua informasi bisnis wajib diisi",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!validateKtpNumber(ktpNumber)) {
       toast({
         title: "Error",
         description: "Nomor KTP harus 16 digit",
@@ -136,7 +151,7 @@ const PhotographerUpgradeRequest = () => {
       return;
     }
 
-    if (formData.business_phone.length < 10) {
+    if (businessPhone.length < 10) {
       toast({
         title: "Error",
         description: "Nomor telepon bisnis tidak valid",
@@ -148,21 +163,21 @@ const PhotographerUpgradeRequest = () => {
     setLoading(true);
 
     try {
+      const photoKeys = await photographerUpgradeService.uploadUpgradePhotos(ktpImage, faceImage);
       // 🆕 NEW: Include location in submission
       const response = await photographerUpgradeService.submitUpgradeRequest({
-        ktp_number: formData.ktp_number,
-        ktp_name: formData.ktp_name,
-        ktp_photo: ktpImage,
-        face_photo: faceImage,
-        business_name: formData.business_name,
-        business_address: formData.business_address,
-        business_phone: formData.business_phone,
-        portfolio_url: formData.portfolio_url || undefined,
+        ktp_number: ktpNumber,
+        ktp_name: ktpName,
+        ...photoKeys,
+        business_name: businessName,
+        business_address: businessAddress,
+        business_phone: businessPhone,
+        portfolio_url: formData.portfolio_url.trim() || undefined,
         // Add location data if available
         ...(locationData && {
-          province_id: locationData.province_id,
+          province_id: String(locationData.province_id),
           province_name: locationData.province_name,
-          city_id: locationData.city_id,
+          city_id: String(locationData.city_id),
           city_name: locationData.city_name,
         }),
       });
@@ -345,7 +360,13 @@ const PhotographerUpgradeRequest = () => {
                   type="button" 
                   className="w-full" 
                   onClick={() => setStep('location')}
-                  disabled={!formData.ktp_number || !formData.ktp_name || !formData.business_name}
+                  disabled={
+                    !formData.ktp_number.trim() ||
+                    !formData.ktp_name.trim() ||
+                    !formData.business_name.trim() ||
+                    !formData.business_address.trim() ||
+                    !formData.business_phone.trim()
+                  }
                 >
                   Lanjut ke Lokasi
                 </Button>

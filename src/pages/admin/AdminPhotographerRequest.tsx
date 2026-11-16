@@ -36,6 +36,31 @@ const AdminPhotographerRequests = () => {
   
   const { toast } = useToast();
 
+  const getPhotoSource = (url?: string | null, base64?: string | null) => {
+    if (url) return url;
+    if (!base64) return "";
+    return base64.startsWith("data:") ? base64 : `data:image/jpeg;base64,${base64}`;
+  };
+
+  const downloadPhoto = async (source: string, filename: string) => {
+    try {
+      const response = await fetch(source);
+      if (!response.ok) throw new Error("Gagal mengunduh foto.");
+      const objectURL = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectURL;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(objectURL);
+    } catch {
+      toast({
+        title: "Gagal mengunduh foto",
+        description: "Periksa koneksi storage dan coba lagi.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Safe date formatter
   const formatDate = (dateString: string | null | undefined, formatStr: string = 'dd MMM yyyy'): string => {
     if (!dateString) return 'N/A';
@@ -583,29 +608,41 @@ const AdminPhotographerRequests = () => {
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Foto KTP</p>
                       <img 
-                        src={requestDetails.ktp_photo_base64} 
+                        src={getPhotoSource(requestDetails.ktp_photo_url, requestDetails.ktp_photo_base64)}
                         alt="KTP" 
                         className="rounded-lg border w-full"
                       />
-                      <Button variant="outline" size="sm" className="w-full mt-2" asChild>
-                        <a href={requestDetails.ktp_photo_base64} download="ktp.jpg">
-                          <Download className="h-4 w-4 mr-2" />
-                          Download KTP
-                        </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-2"
+                        onClick={() => downloadPhoto(
+                          getPhotoSource(requestDetails.ktp_photo_url, requestDetails.ktp_photo_base64),
+                          "ktp.jpg",
+                        )}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download KTP
                       </Button>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Selfie dengan KTP</p>
                       <img 
-                        src={requestDetails.face_photo_base64} 
+                        src={getPhotoSource(requestDetails.face_photo_url, requestDetails.face_photo_base64)}
                         alt="Selfie" 
                         className="rounded-lg border w-full"
                       />
-                      <Button variant="outline" size="sm" className="w-full mt-2" asChild>
-                        <a href={requestDetails.face_photo_base64} download="selfie.jpg">
-                          <Download className="h-4 w-4 mr-2" />
-                          Download Selfie
-                        </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-2"
+                        onClick={() => downloadPhoto(
+                          getPhotoSource(requestDetails.face_photo_url, requestDetails.face_photo_base64),
+                          "selfie.jpg",
+                        )}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Selfie
                       </Button>
                     </div>
                   </div>

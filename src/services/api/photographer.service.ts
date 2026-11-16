@@ -139,21 +139,33 @@ export interface PhotographerProfile {
 }
 
 export interface PhotographerStats {
-  events: {
+  events?: {
     total_events: number;
     active_events: number;
     completed_events: number;
   };
-  photos: {
+  photos?: {
     total_photos: number;
     total_faces_detected: number;
   };
-  downloads: {
+  downloads?: {
     total_downloads: number;
     total_revenue: number;
   };
-  users: {
+  users?: {
     unique_users: number;
+  };
+}
+
+export interface ProfileCompletion {
+  is_complete: boolean;
+  missing_fields: string[];
+  current_data: {
+    province_id: string | number | null;
+    province_name: string | null;
+    city_id: string | number | null;
+    city_name: string | null;
+    business_name?: string;
   };
 }
 
@@ -278,9 +290,9 @@ export interface ProfileCompletion {
   is_complete: boolean;
   missing_fields: string[];
   current_data: {
-    province_id: string | null;
+    province_id: string | number | null;
     province_name: string | null;
-    city_id: string | null;
+    city_id: string | number | null;
     city_name: string | null;
     business_name?: string;
     full_name?: string;
@@ -375,6 +387,18 @@ export const photographerService = {
     return response.data;
   },
 
+  async checkProfileCompletion(): Promise<{
+    success: boolean;
+    data?: ProfileCompletion;
+    error?: string;
+  }> {
+    const response = await photographerApi.get('/photographer/profile/check-completion', {
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      params: { _t: Date.now() },
+    });
+    return response.data;
+  },
+
   async updateProfile(data: {
     business_name?: string;
     bio?: string;
@@ -444,14 +468,6 @@ export const photographerService = {
     const response = await photographerApi.put('/photographer/profile', {
       province_id: Number(data.province_id),
       city_id: Number(data.city_id),
-    });
-    return response.data;
-  },
-
-  async checkProfileCompletion(): Promise<{ success: boolean; data?: ProfileCompletion; error?: string }> {
-    const response = await photographerApi.get('/photographer/profile/check-completion', {
-      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-      params: { _t: new Date().getTime() },
     });
     return response.data;
   },

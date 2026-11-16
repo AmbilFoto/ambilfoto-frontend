@@ -1,5 +1,5 @@
 // frontend/src/components/photographer/LocationCompletionModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -27,10 +27,10 @@ interface LocationCompletionModalProps {
   onComplete?: (locationData: LocationUpdateResponse) => void;
 }
 
-const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({ 
-  open, 
-  onClose, 
-  onComplete 
+const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
+  open,
+  onClose,
+  onComplete,
 }) => {
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -43,195 +43,142 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
 
   const { toast } = useToast();
 
-  // Monitor provinces state changes
-  useEffect(() => {
-    console.log('🔍 Provinces state updated:', {
-      count: provinces.length,
-      provinces: provinces.slice(0, 3) // Show first 3 for debugging
-    });
-  }, [provinces]);
+  const loadProvinces = useCallback(async (): Promise<void> => {
+    setLoadingProvinces(true);
+    setError('');
 
-  // Monitor cities state changes
-  useEffect(() => {
-    console.log('🔍 Cities state updated:', {
-      count: cities.length,
-      cities: cities.slice(0, 3)
-    });
-  }, [cities]);
+    try {
+      const response = await photographerService.getProvinces();
 
-  // Load provinces on mount
+      if (response.success && response.data) {
+        setProvinces(response.data);
+      } else {
+        setError('Data provinsi tidak tersedia');
+        toast({
+          title: 'Error',
+          description: 'Data provinsi tidak tersedia',
+          variant: 'destructive',
+        });
+      }
+    } catch {
+      setError('Gagal memuat data provinsi');
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat data provinsi. Silakan coba lagi.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingProvinces(false);
+    }
+  }, [toast]);
+
+  const loadCities = useCallback(
+    async (provinceId: string): Promise<void> => {
+      setLoadingCities(true);
+      setError('');
+      setSelectedCity('');
+
+      try {
+        const response = await photographerService.getCities(provinceId);
+
+        if (response.success && response.data) {
+          setCities(response.data);
+        } else {
+          setError('Data kota/kabupaten tidak tersedia');
+        }
+      } catch {
+        setError('Gagal memuat data kota/kabupaten');
+        toast({
+          title: 'Error',
+          description: 'Gagal memuat data kota/kabupaten',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoadingCities(false);
+      }
+    },
+    [toast]
+  );
+
+  // Load provinces when modal opens
   useEffect(() => {
     if (open) {
-      console.log('📂 Modal opened, loading provinces...');
       loadProvinces();
     }
-  }, [open]);
+  }, [open, loadProvinces]);
 
   // Load cities when province changes
   useEffect(() => {
     if (selectedProvince) {
-      console.log('📍 Province selected:', selectedProvince);
       loadCities(selectedProvince);
     } else {
       setCities([]);
       setSelectedCity('');
     }
-  }, [selectedProvince]);
-
-  const loadProvinces = async (): Promise<void> => {
-    setLoadingProvinces(true);
-    setError('');
-    
-    try {
-      console.log('🔄 Calling getProvinces API...');
-      
-      const response = await photographerService.getProvinces();
-      
-      console.log('📦 API Response:', response);
-      
-      if (response.success && response.data) {
-        console.log('✅ Provinces loaded successfully:', {
-          count: response.data.length,
-          firstProvince: response.data[0],
-          allProvinces: response.data
-        });
-        
-        setProvinces(response.data);
-      } else {
-        console.error('❌ API returned success=false or no data:', response);
-        setError('Data provinsi tidak tersedia');
-        toast({
-          title: "Error",
-          description: "Data provinsi tidak tersedia",
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      console.error('❌ Load provinces error:', err);
-      console.error('Error details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
-      
-      setError('Gagal memuat data provinsi');
-      toast({
-        title: "Error",
-        description: "Gagal memuat data provinsi. Silakan coba lagi.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingProvinces(false);
-      console.log('✋ Province loading completed');
-    }
-  };
-
-  const loadCities = async (provinceId: string): Promise<void> => {
-    setLoadingCities(true);
-    setError('');
-    setSelectedCity('');
-    
-    try {
-      console.log('🔄 Calling getCities API for province:', provinceId);
-      
-      const response = await photographerService.getCities(provinceId);
-      
-      console.log('📦 Cities API Response:', response);
-      
-      if (response.success && response.data) {
-        console.log('✅ Cities loaded successfully:', {
-          count: response.data.length,
-          firstCity: response.data[0]
-        });
-        
-        setCities(response.data);
-      } else {
-        console.error('❌ API returned success=false or no data');
-        setError('Data kota/kabupaten tidak tersedia');
-      }
-    } catch (err: any) {
-      console.error('❌ Load cities error:', err);
-      console.error('Error details:', {
-        message: err.message,
-        response: err.response?.data
-      });
-      
-      setError('Gagal memuat data kota/kabupaten');
-      toast({
-        title: "Error",
-        description: "Gagal memuat data kota/kabupaten",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingCities(false);
-      console.log('✋ Cities loading completed');
-    }
-  };
+  }, [selectedProvince, loadCities]);
 
   const handleSubmit = async (): Promise<void> => {
-    if (!selectedProvince || !selectedCity) {
-      setError('Silakan pilih provinsi dan kota/kabupaten');
-      toast({
-        title: "Error",
-        description: "Silakan pilih provinsi dan kota/kabupaten",
-        variant: "destructive",
-      });
-      return;
+  if (!selectedProvince || !selectedCity) {
+    setError('Silakan pilih provinsi dan kota/kabupaten');
+    toast({
+      title: 'Error',
+      description: 'Silakan pilih provinsi dan kota/kabupaten',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setLoading(true);
+  setError('');
+
+  try {
+    const response = await photographerService.updateLocation({
+      province_id: selectedProvince,
+      city_id: selectedCity,
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Gagal menyimpan lokasi');
     }
 
-    setLoading(true);
-    setError('');
+    // Fallback: kalau backend tidak mengirim data, bangun dari pilihan user
+    const province = provinces.find((p) => p.id === selectedProvince);
+    const city = cities.find((c) => c.id === selectedCity);
 
-    try {
-      console.log('💾 Saving location:', {
-        province_id: selectedProvince,
-        city_id: selectedCity
-      });
-      
-      const response = await photographerService.updateLocation({
-        province_id: selectedProvince,
-        city_id: selectedCity
-      });
+    const locationData = (response.data ?? {
+      province_id: selectedProvince,
+      province_name: province?.name ?? null,
+      city_id: selectedCity,
+      city_name: city?.name ?? null,
+    }) as LocationUpdateResponse;
 
-      if (response.success && response.data) {
-        console.log('✅ Location updated successfully:', response.data);
-        
-        toast({
-          title: "Berhasil",
-          description: "Lokasi berhasil disimpan",
-        });
-        
-        if (onComplete) {
-          onComplete(response.data);
-        }
-        
-        if (onClose) {
-          onClose();
-        }
-      } else {
-        throw new Error(response.error || 'Failed to update location');
-      }
-    } catch (err: any) {
-      console.error('❌ Update location error:', err);
-      
-      const errorMessage = err.response?.data?.error || err.message || 'Gagal menyimpan lokasi';
-      setError(errorMessage);
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    toast({
+      title: 'Berhasil',
+      description: 'Lokasi berhasil disimpan',
+    });
+
+    onComplete?.(locationData);
+    onClose?.();
+  } catch (err: any) {
+    const errorMessage =
+      err?.response?.data?.error || err?.message || 'Gagal menyimpan lokasi';
+    setError(errorMessage);
+
+    toast({
+      title: 'Error',
+      description: errorMessage,
+      variant: 'destructive',
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSkip = (): void => {
     const confirmed = window.confirm(
       'Anda dapat melengkapi data lokasi nanti di halaman profil. Lanjutkan?'
     );
-    
+
     if (confirmed && onClose) {
       onClose();
     }
@@ -239,7 +186,7 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={undefined}>
-      <DialogContent 
+      <DialogContent
         className="sm:max-w-md"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
@@ -261,7 +208,7 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
             </Button>
           </div>
           <DialogDescription>
-            Agar fotografer lain dan klien dapat menemukan Anda dengan mudah, 
+            Agar fotografer lain dan klien dapat menemukan Anda dengan mudah,
             silakan lengkapi informasi lokasi Anda.
           </DialogDescription>
         </DialogHeader>
@@ -270,7 +217,7 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              Data lokasi membantu meningkatkan visibilitas profil Anda dan 
+              Data lokasi membantu meningkatkan visibilitas profil Anda dan
               memudahkan klien menemukan fotografer terdekat.
             </AlertDescription>
           </Alert>
@@ -287,10 +234,7 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
             <Label htmlFor="province">Provinsi *</Label>
             <Select
               value={selectedProvince}
-              onValueChange={(value) => {
-                console.log('👆 Province selected:', value);
-                setSelectedProvince(value);
-              }}
+              onValueChange={setSelectedProvince}
               disabled={loadingProvinces || loading}
             >
               <SelectTrigger id="province">
@@ -326,21 +270,18 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
             <Label htmlFor="city">Kota/Kabupaten *</Label>
             <Select
               value={selectedCity}
-              onValueChange={(value) => {
-                console.log('👆 City selected:', value);
-                setSelectedCity(value);
-              }}
+              onValueChange={setSelectedCity}
               disabled={!selectedProvince || loadingCities || loading}
             >
               <SelectTrigger id="city">
-                <SelectValue 
+                <SelectValue
                   placeholder={
-                    !selectedProvince 
-                      ? "Pilih provinsi terlebih dahulu" 
+                    !selectedProvince
+                      ? 'Pilih provinsi terlebih dahulu'
                       : loadingCities
-                      ? "Memuat kota..."
-                      : "Pilih Kota/Kabupaten"
-                  } 
+                      ? 'Memuat kota...'
+                      : 'Pilih Kota/Kabupaten'
+                  }
                 />
               </SelectTrigger>
               <SelectContent>
@@ -370,15 +311,15 @@ const LocationCompletionModal: React.FC<LocationCompletionModalProps> = ({
 
           {/* Actions */}
           <div className="flex gap-2 pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleSkip}
               disabled={loading}
               className="flex-1"
             >
               Lewati
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmit}
               disabled={!selectedProvince || !selectedCity || loading}
               className="flex-1"
