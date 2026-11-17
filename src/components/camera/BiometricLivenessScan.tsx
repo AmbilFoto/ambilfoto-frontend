@@ -8,6 +8,15 @@ interface BiometricLivenessScanProps {
   isProcessing?: boolean;
 }
 
+// Jeda antar frame yang dikirim ke server (tiap frame = 1 percobaan di backend)
+const FRAME_INTERVAL_MS = 1000;
+// Jeda setelah gerakan berganti, supaya user sempat menoleh
+const CHALLENGE_SETTLE_MS = 1500;
+// Jeda awal sebelum frame pertama dikirim
+const INITIAL_DELAY_MS = 800;
+// Set true jika arah kiri/kanan terbalik di backend (frame dikirim ter-mirror seperti preview)
+const MIRROR_FRAME = false;
+
 const challengeInstructions: Record<string, string> = {
   CENTER: "Lihat lurus ke kamera",
   LEFT: "Tolehkan kepala ke kiri",
@@ -55,22 +64,41 @@ export function BiometricLivenessScan({
 
   useEffect(() => stopCamera, []);
 
+  const scheduleNext = (delay: number) => {
+    if (!activeRef.current) return;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(captureFrame, delay);
+  };
+
   const captureFrame = async () => {
     if (!activeRef.current || frameBusyRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      timerRef.current = window.setTimeout(captureFrame, 250);
+    if (
+      !video ||
+      !canvas ||
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      !video.videoWidth
+    ) {
+      scheduleNext(250);
       return;
     }
 
     frameBusyRef.current = true;
+    let nextDelay = FRAME_INTERVAL_MS;
     try {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Kamera tidak dapat diproses");
+
+      context.save();
+      if (MIRROR_FRAME) {
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+      }
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.restore();
 
       const result = await aiService.submitBiometricFrame(
         sessionIdRef.current,
@@ -80,11 +108,7 @@ export function BiometricLivenessScan({
       if (!activeRef.current) return;
 
       if (result.message) setInstruction(result.message);
-      if (result.matched && result.next_challenge) {
-        challengeRef.current = result.next_challenge;
-        setChallenge(result.next_challenge);
-        setInstruction(challengeInstructions[result.next_challenge] || "Ikuti petunjuk di layar");
-      }
+
       if (result.done) {
         activeRef.current = false;
         if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -95,7 +119,14 @@ export function BiometricLivenessScan({
         onComplete(complete);
         return;
       }
-      if (result.attempts_remaining === 0) {
+
+      if (result.matched && result.next_challenge) {
+        challengeRef.current = result.next_challenge;
+        setChallenge(result.next_challenge);
+        setInstruction(challengeInstructions[result.next_challenge] || "Ikuti petunjuk di layar");
+        // Beri waktu user menoleh sebelum frame berikutnya dihitung
+        nextDelay = CHALLENGE_SETTLE_MS;
+      } else if (result.attempts_remaining === 0) {
         stopCamera();
         setError("Batas percobaan untuk gerakan ini tercapai. Silakan mulai ulang.");
         return;
@@ -108,7 +139,7 @@ export function BiometricLivenessScan({
       frameBusyRef.current = false;
     }
 
-    if (activeRef.current) timerRef.current = window.setTimeout(captureFrame, 600);
+    scheduleNext(nextDelay);
   };
 
   const startScan = async () => {
@@ -134,7 +165,7 @@ export function BiometricLivenessScan({
       setInstruction(challengeInstructions[session.challenge[0]] || "Ikuti petunjuk di layar");
       activeRef.current = true;
       setIsScanning(true);
-      timerRef.current = window.setTimeout(captureFrame, 250);
+      timerRef.current = window.setTimeout(captureFrame, INITIAL_DELAY_MS);
     } catch (scanError) {
       stopCamera();
       setError(errorMessage(scanError));
@@ -152,9 +183,11 @@ export function BiometricLivenessScan({
           className="h-full w-full object-cover [transform:scaleX(-1)]"
         />
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className={`h-64 w-48 max-h-[75%] max-w-[65%] rounded-[50%] border-4 ${
-            isScanning ? "border-emerald-400" : "border-white/60"
-          }`} />
+          <div
+            className={`h-64 w-48 max-h-[75%] max-w-[65%] rounded-[50%] border-4 ${
+              isScanning ? "border-emerald-400" : "border-white/60"
+            }`}
+          />
         </div>
         <div className="absolute bottom-4 left-3 right-3 rounded-full bg-black/65 px-4 py-2 text-center text-sm font-medium text-white">
           {instruction}
@@ -166,31 +199,40 @@ export function BiometricLivenessScan({
         )}
       </div>
       <canvas ref={canvasRef} className="hidden" />
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         {isScanning ? (
           <Button type="button" variant="outline" className="w-full" onClick={stopCamera}>
             Batalkan scan
           </Button>
         ) : (
-          <Button
-            type="button"
-            className="w-full"
-            onClick={startScan}
-            disabled={isProcessing}
-          >
+          <Button type="button" className="w-full" onClick={startScan} disabled={isProcessing}>
             {isProcessing ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Memproses...</>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Memproses...
+              </>
             ) : error ? (
-              <><RotateCcw className="mr-2 h-4 w-4" />Ulangi verifikasi</>
+              <>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Ulangi verifikasi
+              </>
             ) : (
-              <><Camera className="mr-2 h-4 w-4" />Mulai scan biometric</>
+              <>
+                <Camera className="mr-2 h-4 w-4" />
+                Mulai scan biometric
+              </>
             )}
           </Button>
         )}
       </div>
       <p className="text-center text-xs text-muted-foreground">
-        Ikuti gerakan wajah yang diminta. Frame kamera dipakai sementara untuk liveness dan tidak disimpan sebagai foto.
+        Ikuti gerakan wajah yang diminta. Frame kamera dipakai sementara untuk liveness dan tidak
+        disimpan sebagai foto.
       </p>
     </div>
   );

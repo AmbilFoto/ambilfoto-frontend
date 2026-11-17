@@ -220,7 +220,7 @@ export default function GlobalEventsMap() {
         cluster: zoom < 12
       });
       
-      setEvents(data.events);
+      setEvents(data.events || []);
       setClusters(data.clusters || []);
       
     } catch (error: any) {
@@ -240,6 +240,10 @@ export default function GlobalEventsMap() {
     e.event_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.location?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // ✅ FIX: cluster HANYA dipakai kalau server benar-benar mengirim cluster.
+  // Kalau clusters kosong, titik event tetap digambar di semua level zoom.
+  const showClusters = zoom < 12 && clusters.length > 0;
 
   // Klik marker di peta langsung → tampilkan sidebar
   const handleMarkerClick = (event: GlobalEvent) => {
@@ -437,7 +441,8 @@ export default function GlobalEventsMap() {
             </Marker>
           )}
 
-          {zoom < 12 && clusters.map((cluster, idx) => (
+          {/* Cluster: hanya kalau server mengirim cluster */}
+          {showClusters && clusters.map((cluster, idx) => (
             <Marker
               key={`cluster-${idx}`}
               position={[cluster.center.lat, cluster.center.lng]}
@@ -481,7 +486,8 @@ export default function GlobalEventsMap() {
             </Marker>
           ))}
 
-          {zoom >= 12 && filteredEvents.map((event) => (
+          {/* ✅ FIX: titik event selalu tampil di semua zoom (kecuali sedang mode cluster dari server) */}
+          {!showClusters && filteredEvents.map((event) => (
             <Marker
               key={event.event_id}
               position={[event.latitude, event.longitude]}
@@ -522,11 +528,13 @@ export default function GlobalEventsMap() {
 
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Calendar className="h-3 w-3" />
-                      {new Date(event.event_date).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
+                      {event.event_date
+                        ? new Date(event.event_date).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          })
+                        : '-'}
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-2">
@@ -536,7 +544,7 @@ export default function GlobalEventsMap() {
 
                     <div className="flex items-center gap-2 pt-2 border-t">
                       <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-                        {event.photographer.photo ? (
+                        {event.photographer?.photo ? (
                           <img 
                             src={event.photographer.photo} 
                             alt={event.photographer.name}
@@ -549,7 +557,7 @@ export default function GlobalEventsMap() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{event.photographer.name}</p>
+                        <p className="text-xs font-medium truncate">{event.photographer?.name || 'Photographer'}</p>
                         <p className="text-xs text-gray-500">Photographer</p>
                       </div>
                     </div>
@@ -576,7 +584,7 @@ export default function GlobalEventsMap() {
                 <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex-shrink-0"></div>
                 <span className="text-xs font-medium">Event</span>
               </div>
-              {zoom < 12 && clusters.length > 0 && (
+              {showClusters && (
                 <div className="flex items-center gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-gradient-to-br from-orange-600 to-orange-700 flex-shrink-0"></div>
                   <span className="text-xs font-medium">Cluster Events</span>
@@ -596,7 +604,7 @@ export default function GlobalEventsMap() {
         <div className="absolute top-2 md:top-24 right-4 md:right-6 z-[1000] bg-white rounded-lg shadow-lg px-3 py-2 border border-gray-200">
           <p className="text-xs text-gray-500">
             Zoom: <span className="font-bold text-gray-800">{zoom}</span>
-            {zoom < 12 && <span className="text-orange-600 ml-2">(Clustered)</span>}
+            {showClusters && <span className="text-orange-600 ml-2">(Clustered)</span>}
           </p>
         </div>
       </div>
