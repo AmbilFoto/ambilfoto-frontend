@@ -27,41 +27,41 @@ const PhotographerHeader = () => {
         <Link to="/photographer/dashboard" className="flex items-center gap-2 transition-all duration-200 hover:opacity-80">
           <img 
             src="https://res.cloudinary.com/dwyi4d3rq/image/upload/v1765171746/ambilfoto-logo_hvn8s2.png" 
-            alt="AmbilFoto.id Logo" 
+            alt="Logo AmbilFoto.id" 
             className="h-20 w-auto"
           />
         </Link>
 
-        {/* Navigation & User Menu */}
+        {/* Navigasi & Menu Pengguna */}
         <div className="flex items-center gap-4">
           {isAuthenticated && (
             <>
-              {/* Quick Action Button - Create Event */}
+              {/* Tombol Aksi Cepat - Buat Event */}
               <Link to="/photographer/events/new" className="hidden md:block">
                 <Button className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Create Event
+                  Buat Event
                 </Button>
               </Link>
 
-              {/* User Dropdown Menu */}
+              {/* Dropdown Menu Pengguna */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-2">
                     <Camera className="h-4 w-4" />
-                    <span className="hidden md:inline">{user?.full_name || 'Photographer'}</span>
+                    <span className="hidden md:inline">{user?.full_name || 'Fotografer'}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{user?.full_name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">Photographer Account</p>
+                      <p className="text-xs leading-none text-muted-foreground">Akun Fotografer</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   
-                  {/* Dashboard Links */}
+                  {/* Link Dashboard */}
                   <DropdownMenuItem asChild>
                     <Link to="/photographer/dashboard" className="cursor-pointer">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -71,32 +71,32 @@ const PhotographerHeader = () => {
                   <DropdownMenuItem asChild>
                     <Link to="/photographer/events" className="cursor-pointer">
                       <Calendar className="mr-2 h-4 w-4" />
-                      My Events
+                      Event Saya
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild className="md:hidden">
                     <Link to="/photographer/events/new" className="cursor-pointer">
                       <Plus className="mr-2 h-4 w-4" />
-                      Create Event
+                      Buat Event
                     </Link>
                   </DropdownMenuItem>
                   
                   <DropdownMenuSeparator />
                   
-                  {/* Settings */}
+                  {/* Pengaturan */}
                   <DropdownMenuItem asChild>
                     <Link to="/photographer/profile" className="cursor-pointer">
                       <Settings className="mr-2 h-4 w-4" />
-                      Business Profile
+                      Profil Bisnis
                     </Link>
                   </DropdownMenuItem>
                   
                   <DropdownMenuSeparator />
                   
-                  {/* Logout */}
+                  {/* Keluar */}
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
-                    Logout
+                    Keluar
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -106,10 +106,10 @@ const PhotographerHeader = () => {
           {!isAuthenticated && (
             <>
               <Link to="/login">
-                <Button variant="ghost">Login</Button>
+                <Button variant="ghost">Masuk</Button>
               </Link>
               <Link to="/register">
-                <Button>Get Started</Button>
+                <Button>Mulai Sekarang</Button>
               </Link>
             </>
           )}

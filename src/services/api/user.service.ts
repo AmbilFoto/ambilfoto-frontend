@@ -287,11 +287,18 @@ export const userService = {
     const eventPhotos      = eventRes.status === 'fulfilled' ? eventRes.value.data ?? [] : [];
     const standalonePhotos = standaloneRes.status === 'fulfilled' ? standaloneRes.value.data ?? [] : [];
 
-    // Tag event photos so UI can differentiate
-    const tagged = [
-      ...eventPhotos.map(p => ({ ...p, type: 'event' as const })),
-      ...standalonePhotos.map(p => ({ ...p, type: 'standalone' as const })),
-    ].sort((a, b) => {
+    // `/my-photos` already includes the standalone matches returned by
+    // `/my-standalone-photos`, so merge by photo_id instead of concatenating.
+    const byPhoto = new Map<string, UserPhoto>();
+    for (const photo of [...eventPhotos, ...standalonePhotos]) {
+      const id = photo.photo_id || photo.event_photo_id;
+      if (!id || byPhoto.has(id)) continue;
+      byPhoto.set(id, {
+        ...photo,
+        type: photo.type ?? (photo.event_id ? 'event' : 'standalone'),
+      });
+    }
+    const merged = [...byPhoto.values()].sort((a, b) => {
       // Sort by match_date descending (newest first)
       const dateA = new Date(a.match_date ?? a.event_date ?? 0).getTime();
       const dateB = new Date(b.match_date ?? b.event_date ?? 0).getTime();
@@ -300,9 +307,9 @@ export const userService = {
 
     return {
       success: true,
-      data:    tagged,
+      data:    merged,
       pagination: {
-        total:       tagged.length,
+        total:       merged.length,
         page:        params?.page ?? 1,
         limit:       params?.limit ?? 100,
         total_pages: 1,

@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, MoreVertical, Lock, ShieldAlert } from "lucide-react";
-import { chatService, ChatMessage, Chat } from "@/services/api/chat.service";
+import { ArrowLeft, Send, MoreVertical, Lock, ShieldAlert, Flag } from "lucide-react";
+import { chatService, ChatMessage, Chat, ComplaintType, COMPLAINT_TYPES } from "@/services/api/chat.service";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDistanceToNow } from "date-fns";
@@ -17,6 +17,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 const ChatRoom = () => {
   const { chatId } = useParams<{ chatId: string }>();
@@ -25,6 +35,9 @@ const ChatRoom = () => {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState<ComplaintType>("harassment");
+  const [isReporting, setIsReporting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -88,6 +101,24 @@ const ChatRoom = () => {
     }
   };
 
+  const handleReportToTeam = async () => {
+    if (!chatId || isReporting) return;
+    try {
+      setIsReporting(true);
+      await chatService.reportChatToTeam(chatId, reportType);
+      toast({
+        title: "Laporan terkirim",
+        description: "Tim Ambilfoto akan meninjau percakapan ini. Terima kasih atas laporanmu.",
+      });
+      setReportOpen(false);
+    } catch (error: any) {
+      const msg = error.response?.data?.error || "Gagal mengirim laporan. Coba lagi.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
   const otherParticipant = chatInfo?.participants.find(p => p.user_id !== user?.id);
   const backPath = user?.role === 'photographer' ? '/photographer/chat' : '/user/chat';
 
@@ -134,6 +165,10 @@ const ChatRoom = () => {
                 <Button variant="ghost" size="icon" className="text-muted-foreground"><MoreVertical className="h-5 w-5" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setReportOpen(true)}>
+                  <Flag className="h-4 w-4 mr-2" />
+                  Lapor ke Tim Ambilfoto
+                </DropdownMenuItem>
                 {otherParticipant && (
                   <DropdownMenuItem className="text-destructive" onClick={() => handleBlockUser(otherParticipant.user_id)}>
                     Block User
@@ -243,6 +278,50 @@ const ChatRoom = () => {
           )}
         </div>
       </footer>
+
+      {/* Report to Ambilfoto team */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag className="h-4 w-4 text-destructive" />
+              Lapor ke Tim Ambilfoto
+            </DialogTitle>
+            <DialogDescription>
+              Pilih alasan laporan. Tim Ambilfoto akan meninjau percakapan ini.
+            </DialogDescription>
+          </DialogHeader>
+
+          <RadioGroup
+            value={reportType}
+            onValueChange={(v) => setReportType(v as ComplaintType)}
+            className="gap-2 py-2"
+          >
+            {COMPLAINT_TYPES.map((t) => (
+              <Label
+                key={t.value}
+                htmlFor={`report-${t.value}`}
+                className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/50 [&:has([data-state=checked])]:border-primary"
+              >
+                <RadioGroupItem id={`report-${t.value}`} value={t.value} className="mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium leading-none">{t.label}</p>
+                  <p className="text-xs text-muted-foreground">{t.description}</p>
+                </div>
+              </Label>
+            ))}
+          </RadioGroup>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportOpen(false)} disabled={isReporting}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={handleReportToTeam} disabled={isReporting}>
+              {isReporting ? "Mengirim..." : "Kirim Laporan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

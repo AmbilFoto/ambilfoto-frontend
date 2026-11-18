@@ -26,6 +26,7 @@ import {
   Crown,
 } from "lucide-react";
 import { format } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +78,7 @@ const Events = () => {
       console.error('Failed to fetch events:', error);
       toast({
         title: "Error",
-        description: "Failed to load events",
+        description: "Gagal memuat event",
         variant: "destructive",
       });
     } finally {
@@ -88,7 +89,7 @@ const Events = () => {
   const filterEvents = () => {
     let filtered = [...events];
 
-    // Filter by tab
+    // Filter berdasarkan tab
     if (activeTab === "mine") {
       // Event yang dibuat sendiri
       filtered = filtered.filter(e => !e.my_role || e.my_role === 'owner');
@@ -96,11 +97,11 @@ const Events = () => {
       // Event yang di-join sebagai kolaborator
       filtered = filtered.filter(e => e.my_role === 'collaborator');
     } else if (activeTab !== "all") {
-      // Filter by status (active / completed / archived)
+      // Filter berdasarkan status (active / completed / archived)
       filtered = filtered.filter(e => e.status === activeTab);
     }
 
-    // Filter by search query
+    // Filter berdasarkan pencarian
     if (searchQuery) {
       filtered = filtered.filter(event =>
         event.event_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -118,8 +119,8 @@ const Events = () => {
       const response = await photographerService.deleteEvent(eventToDelete.id);
       if (response.success) {
         toast({
-          title: "Success",
-          description: "Event archived successfully",
+          title: "Berhasil",
+          description: "Event berhasil diarsipkan",
         });
         fetchEvents();
       } else {
@@ -128,7 +129,7 @@ const Events = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete event",
+        description: error.message || "Gagal menghapus event",
         variant: "destructive",
       });
     } finally {
@@ -150,6 +151,19 @@ const Events = () => {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'Aktif';
+      case 'completed':
+        return 'Selesai';
+      case 'archived':
+        return 'Diarsipkan';
+      default:
+        return status;
+    }
+  };
+
   // Hitung jumlah event per kategori untuk badge counter di tab
   const ownedCount = events.filter(e => !e.my_role || e.my_role === 'owner').length;
   const joinedCount = events.filter(e => e.my_role === 'collaborator').length;
@@ -162,34 +176,34 @@ const Events = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold">My Events</h1>
+            <h1 className="text-3xl font-bold">Event Saya</h1>
             <p className="text-muted-foreground mt-1">
-              Manage your events and collaborations
+              Kelola event dan kolaborasi Anda
             </p>
           </div>
           <div className="flex gap-2">
-            {/* Tombol Discover — untuk temukan event publik */}
+            {/* Tombol Jelajahi — untuk temukan event publik */}
             <Link to="/photographer/events/discover">
               <Button variant="outline" className="gap-2">
                 <Globe className="h-4 w-4" />
-                Discover
+                Jelajahi
               </Button>
             </Link>
             <Link to="/photographer/events/new">
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
-                Create Event
+                Buat Event
               </Button>
             </Link>
           </div>
         </div>
 
-        {/* Search & Filter */}
+        {/* Pencarian & Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search events..."
+              placeholder="Cari event..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -198,7 +212,7 @@ const Events = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
             <TabsList>
               <TabsTrigger value="all">
-                All
+                Semua
                 <span className="ml-1.5 text-xs text-muted-foreground">({events.length})</span>
               </TabsTrigger>
               <TabsTrigger value="mine">
@@ -213,13 +227,13 @@ const Events = () => {
                   <span className="ml-1.5 text-xs text-blue-500 font-semibold">({joinedCount})</span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="active">Aktif</TabsTrigger>
+              <TabsTrigger value="completed">Selesai</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
 
-        {/* Events Grid */}
+        {/* Grid Event */}
         {isLoading ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -239,19 +253,19 @@ const Events = () => {
           <Card className="py-12">
             <CardContent className="text-center">
               <Calendar className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No events found</h3>
+              <h3 className="text-lg font-semibold mb-2">Event tidak ditemukan</h3>
               <p className="text-muted-foreground mb-4">
                 {searchQuery
-                  ? "Try adjusting your search"
+                  ? "Coba ubah kata kunci pencarian Anda"
                   : activeTab === "joined"
                   ? "Belum bergabung ke event manapun. Temukan event kolaboratif!"
-                  : "Create your first event to get started"}
+                  : "Buat event pertama Anda untuk memulai"}
               </p>
               {!searchQuery && activeTab !== "joined" && (
                 <Link to="/photographer/events/new">
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Event
+                    Buat Event
                   </Button>
                 </Link>
               )}
@@ -259,7 +273,7 @@ const Events = () => {
                 <Link to="/photographer/events/discover">
                   <Button variant="outline">
                     <Globe className="h-4 w-4 mr-2" />
-                    Discover Events
+                    Jelajahi Event
                   </Button>
                 </Link>
               )}
@@ -279,7 +293,7 @@ const Events = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <CardTitle className="truncate">{event.event_name}</CardTitle>
-                          {/* Role indicator */}
+                          {/* Indikator role */}
                           {isCollaborator && (
                             <span title="Anda adalah kolaborator">
                               <Users className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
@@ -293,7 +307,7 @@ const Events = () => {
                         </div>
                         <CardDescription className="flex items-center gap-1 mt-1">
                           <Calendar className="h-3 w-3" />
-                          {format(new Date(event.event_date), 'MMM dd, yyyy')}
+                          {format(new Date(event.event_date), 'dd MMM yyyy', { locale: idLocale })}
                         </CardDescription>
                       </div>
 
@@ -304,7 +318,7 @@ const Events = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {/* View Details — semua role bisa */}
+                          {/* Lihat Detail — semua role bisa */}
                           <DropdownMenuItem asChild>
                             <Link to={
                             isCollaborator
@@ -312,12 +326,12 @@ const Events = () => {
                               : `/photographer/events/${event.id}`
                           }>
                               <Eye className="h-4 w-4 mr-2" />
-                              View Details
+                              Lihat Detail
                             </Link>
                           </DropdownMenuItem>
 
                           {/* Upload — semua role bisa (backend yang validasi) */}
-                          {/* Upload Foto — owner → manage page, collaborator → public detail */}
+                          {/* Upload Foto — owner → halaman kelola, collaborator → detail publik */}
                           <DropdownMenuItem asChild>
                             <Link to={
                               isCollaborator
@@ -329,7 +343,7 @@ const Events = () => {
                             </Link>
                           </DropdownMenuItem>
 
-                          {/* Edit & Archive — HANYA owner */}
+                          {/* Edit & Arsipkan — HANYA owner */}
                           {isOwner && (
                             <>
                               <DropdownMenuSeparator />
@@ -347,7 +361,7 @@ const Events = () => {
                                 }}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
-                                Archive Event
+                                Arsipkan Event
                               </DropdownMenuItem>
                             </>
                           )}
@@ -364,17 +378,17 @@ const Events = () => {
                       </p>
                     )}
 
-                    {/* Stats row */}
+                    {/* Baris statistik */}
                     <div className="flex items-center gap-4 text-sm flex-wrap">
                       <div className="flex items-center gap-1">
                         <Image className="h-4 w-4 text-muted-foreground" />
-                        <span>{event.photo_count || 0} photos</span>
+                        <span>{event.photo_count || 0} foto</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{event.matched_users_count || 0} users</span>
+                        <span>{event.matched_users_count || 0} pengguna</span>
                       </div>
-                      {/* Collaborator count — hanya untuk owner event kolaboratif */}
+                      {/* Jumlah kolaborator — hanya untuk owner event kolaboratif */}
                       {isOwner && event.is_collaborative && (
                         <div className="flex items-center gap-1 text-blue-600">
                           <Users className="h-4 w-4" />
@@ -383,11 +397,11 @@ const Events = () => {
                       )}
                     </div>
 
-                    {/* Footer: badges + tombol */}
+                    {/* Footer: badge + tombol */}
                     <div className="flex items-center justify-between mt-4 pt-4 border-t">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={getStatusColor(event.status)}>
-                          {event.status}
+                          {getStatusLabel(event.status)}
                         </Badge>
                         {event.is_collaborative && (
                           <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">
@@ -397,13 +411,13 @@ const Events = () => {
                         {/* FIX: Tampilkan badge role untuk kolaborator */}
                         {isCollaborator && (
                           <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/20">
-                            Joined
+                            Bergabung
                           </Badge>
                         )}
                       </div>
                       <Link to={`/photographer/events/${event.id}`}>
                         <Button variant="outline" size="sm">
-                          {isCollaborator ? "Upload" : "Manage"}
+                          {isCollaborator ? "Upload" : "Kelola"}
                         </Button>
                       </Link>
                     </div>
@@ -417,19 +431,19 @@ const Events = () => {
 
       <Footer />
 
-      {/* Delete Confirmation Dialog */}
+      {/* Dialog Konfirmasi Arsip */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive Event?</AlertDialogTitle>
+            <AlertDialogTitle>Arsipkan Event?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will archive "{eventToDelete?.event_name}". The event and its photos will be hidden but not permanently deleted.
+              Event "{eventToDelete?.event_name}" akan diarsipkan. Event beserta foto-fotonya akan disembunyikan, tetapi tidak dihapus permanen.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteEvent}>
-              Archive
+              Arsipkan
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

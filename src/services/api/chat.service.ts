@@ -79,6 +79,24 @@ export interface ComplaintTicket {
   created_at: string;
 }
 
+// Complaint types for reporting a conversation to the Ambilfoto team.
+export type ComplaintType =
+  | 'harassment'
+  | 'scam'
+  | 'inappropriate'
+  | 'spam'
+  | 'payment'
+  | 'other';
+
+export const COMPLAINT_TYPES: { value: ComplaintType; label: string; description: string }[] = [
+  { value: 'harassment',    label: 'Pelecehan / Kata Kasar', description: 'Ancaman, kata kasar, atau perilaku tidak sopan' },
+  { value: 'scam',          label: 'Penipuan',               description: 'Dugaan penipuan atau transaksi mencurigakan' },
+  { value: 'inappropriate', label: 'Konten Tidak Pantas',    description: 'Gambar atau pesan yang tidak pantas' },
+  { value: 'spam',          label: 'Spam',                   description: 'Pesan berulang atau promosi tidak diinginkan' },
+  { value: 'payment',       label: 'Masalah Pembayaran',     description: 'Kendala terkait pembayaran atau refund' },
+  { value: 'other',         label: 'Lainnya',                description: 'Masalah lain yang perlu ditinjau tim' },
+];
+
 export interface Pagination {
   total: number;
   page: number;
@@ -203,6 +221,13 @@ export const chatService = {
   // Get complaint details
   async getComplaintDetails(ticketId: string): Promise<ComplaintTicket> {
     const response = await chatApi.get(`/chat/complaint/${ticketId}`);
+    return response.data.data;
+  },
+
+  // Report a conversation to the Ambilfoto team.
+  // Backend: POST /chat/complaint { chat_id, type } -> { id }
+  async reportChatToTeam(chatId: string, type: ComplaintType): Promise<{ id: string }> {
+    const response = await chatApi.post('/chat/complaint', { chat_id: chatId, type });
     return response.data.data;
   },
 

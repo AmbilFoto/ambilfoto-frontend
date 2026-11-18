@@ -48,7 +48,7 @@ const PhotographerProfilePage = () => {
       console.error('Failed to fetch profile:', error);
       toast({
         title: "Error",
-        description: "Failed to load profile",
+        description: "Gagal memuat profil",
         variant: "destructive",
       });
     } finally {
@@ -75,8 +75,8 @@ const PhotographerProfilePage = () => {
 
       if (response.success) {
         toast({
-          title: "Success",
-          description: "Profile updated successfully",
+          title: "Berhasil",
+          description: "Profil berhasil diperbarui",
         });
         fetchProfile();
       } else {
@@ -85,7 +85,7 @@ const PhotographerProfilePage = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update profile",
+        description: error.message || "Gagal memperbarui profil",
         variant: "destructive",
       });
     } finally {
@@ -116,14 +116,14 @@ const PhotographerProfilePage = () => {
       <PhotographerHeader />
       
       <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <h1 className="text-3xl font-bold mb-6">Business Profile</h1>
+        <h1 className="text-3xl font-bold mb-6">Profil Bisnis</h1>
 
-        {/* User Info Card */}
+        {/* Kartu Informasi Pengguna */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Account Information
+              Informasi Akun
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -142,24 +142,24 @@ const PhotographerProfilePage = () => {
           </CardContent>
         </Card>
 
-        {/* Business Profile Form */}
+        {/* Formulir Profil Bisnis */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building className="h-5 w-5" />
-              Business Details
+              Detail Bisnis
             </CardTitle>
             <CardDescription>
-              Update your business profile information
+              Perbarui informasi profil bisnis Anda
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="business_name">Business Name</Label>
+                <Label htmlFor="business_name">Nama Bisnis</Label>
                 <Input
                   id="business_name"
-                  placeholder="Your photography business name"
+                  placeholder="Nama bisnis fotografi Anda"
                   value={formData.business_name}
                   onChange={(e) => handleChange('business_name', e.target.value)}
                 />
@@ -169,7 +169,7 @@ const PhotographerProfilePage = () => {
                 <Label htmlFor="bio">Bio</Label>
                 <Textarea
                   id="bio"
-                  placeholder="Tell clients about your photography style and experience..."
+                  placeholder="Ceritakan kepada klien tentang gaya fotografi dan pengalaman Anda..."
                   value={formData.bio}
                   onChange={(e) => handleChange('bio', e.target.value)}
                   rows={4}
@@ -179,39 +179,39 @@ const PhotographerProfilePage = () => {
               <div className="space-y-2">
                 <Label htmlFor="portfolio_url" className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4" />
-                  Portfolio URL
+                  URL Portofolio
                 </Label>
                 <Input
                   id="portfolio_url"
                   type="url"
-                  placeholder="https://yourportfolio.com"
+                  placeholder="https://portofolioanda.com"
                   value={formData.portfolio_url}
                   onChange={(e) => handleChange('portfolio_url', e.target.value)}
                 />
               </div>
 
-              {/* Payment Info */}
+              {/* Informasi Pembayaran */}
               <div className="pt-4 border-t">
                 <h3 className="font-medium flex items-center gap-2 mb-4">
                   <CreditCard className="h-4 w-4" />
-                  Payment Information
+                  Informasi Pembayaran
                 </h3>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bank_name">Bank Name</Label>
+                    <Label htmlFor="bank_name">Nama Bank</Label>
                     <Input
                       id="bank_name"
-                      placeholder="e.g., BCA, Mandiri"
+                      placeholder="mis. BCA, Mandiri"
                       value={formData.bank_name}
                       onChange={(e) => handleChange('bank_name', e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="bank_account">Account Number</Label>
+                    <Label htmlFor="bank_account">Nomor Rekening</Label>
                     <Input
                       id="bank_account"
-                      placeholder="Your bank account number"
+                      placeholder="Nomor rekening bank Anda"
                       value={formData.bank_account}
                       onChange={(e) => handleChange('bank_account', e.target.value)}
                     />
@@ -223,10 +223,10 @@ const PhotographerProfilePage = () => {
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    Menyimpan...
                   </>
                 ) : (
-                  'Save Changes'
+                  'Simpan Perubahan'
                 )}
               </Button>
             </form>

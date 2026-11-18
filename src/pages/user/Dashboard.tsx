@@ -75,7 +75,15 @@ const UserDashboard = () => {
       const eventPhotos: UserPhoto[] = eventRes.success && eventRes.data ? eventRes.data : [];
       const standalonePhotos: UserPhoto[] = standaloneRes.success && standaloneRes.data ? standaloneRes.data : [];
 
-      setPhotos([...eventPhotos, ...standalonePhotos]);
+      // `/my-photos` already includes standalone matches; `/my-standalone-photos`
+      // is only a filtered subset, so concatenating both counted the same photo
+      // twice. Keep one entry per photo_id.
+      const byPhoto = new Map<string, UserPhoto>();
+      for (const photo of [...eventPhotos, ...standalonePhotos]) {
+        const id = photo.photo_id || photo.event_photo_id;
+        if (id && !byPhoto.has(id)) byPhoto.set(id, photo);
+      }
+      setPhotos([...byPhoto.values()]);
     } catch {
       setPhotos([]);
     }

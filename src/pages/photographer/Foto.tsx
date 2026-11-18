@@ -449,6 +449,27 @@ const StatsBar = ({ photos }: { photos: StandalonePhoto[] }) => {
   );
 };
 
+// ─── Helper: normalisasi response API menjadi array ───────────────────────────
+// Backend bisa mengembalikan array langsung, atau object dengan array di
+// dalamnya (mis. { photos: [...], total }). Fungsi ini menangani keduanya.
+
+const extractPhotos = (raw: any): StandalonePhoto[] => {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    const candidates = [raw.photos, raw.items, raw.results, raw.rows, raw.data];
+    for (const c of candidates) {
+      if (Array.isArray(c)) return c;
+      // nested: { data: { photos: [...] } }
+      if (c && typeof c === "object") {
+        const nested = [c.photos, c.items, c.results, c.rows];
+        for (const n of nested) if (Array.isArray(n)) return n;
+      }
+    }
+  }
+  console.warn("[Foto] Format response getMyAllPhotos tidak dikenali:", raw);
+  return [];
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type FilterSource = "all" | "standalone" | "event";
@@ -473,8 +494,10 @@ export default function PhotographerMyPhotos() {
     setLoading(true);
     try {
       const res = await photographerService.getMyAllPhotos({ limit: 100 });
-      if (res.success && res.data) setPhotos(res.data);
+      if (res.success && res.data) setPhotos(extractPhotos(res.data));
+      else setPhotos([]);
     } catch {
+      setPhotos([]);
       toast.error("Gagal memuat foto");
     } finally {
       setLoading(false);
