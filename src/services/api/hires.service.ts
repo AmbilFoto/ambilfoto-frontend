@@ -168,18 +168,22 @@ export const hiresService = {
       const response = await api.get(`/hires/photographer/queue?${queryParams.toString()}`);
       
       // ✅ Backend sudah mengirim preview_url, tinggal map field yang diperlukan saja
-      if (response.data.success && response.data.data) {
-        response.data.data.queue = response.data.data.queue.map((item: any) => ({
-          ...item,
-          queue_id: item.id,                    // Map id -> queue_id
-          filename: item.photo_filename,        // Map photo_filename -> filename
-          buyer_name: item.user_name,           // Map user_name -> buyer_name
-          buyer_email: item.user_email,         // Map user_email -> buyer_email
-          is_overdue: Boolean(item.is_overdue), // ✅ Convert 0/1 to boolean
-        }));
-      }
-      
-      return response.data;
+      const payload = response.data?.data;
+      const queue = Array.isArray(payload) ? payload : (payload?.queue || []);
+      return {
+        success: response.data?.success === true,
+        data: {
+          queue: queue.map((item: any) => ({
+            ...item,
+            queue_id: item.queue_id || item.id,
+            status: item.status === 'waiting' ? 'pending' : item.status,
+            sla_deadline: item.sla_deadline || item.sla_due_at || null,
+            is_overdue: Boolean(item.is_overdue),
+          })),
+          ...(payload?.stats ? { stats: payload.stats } : {}),
+        },
+        error: response.data?.error,
+      };
     } catch (error: any) {
       console.error('getQueue error:', error.response?.data || error.message);
       throw error;
@@ -268,27 +272,27 @@ export const hiresService = {
       const response = await api.get(`/hires/admin/analytics${queryParams}`);
       
       // ✅ Normalize data untuk handling null values dan string numbers
-      if (response.data.success && response.data.data) {
-        const data = response.data.data;
-        
-        // Normalize by_photographer data
-        if (data.by_photographer) {
-          data.by_photographer = data.by_photographer.map((p: any) => ({
-            ...p,
-            avg_hours: p.avg_hours === null ? null : Number(p.avg_hours),
-            sla_compliance_pct: Number(p.sla_compliance_pct || 0),
-          }));
-        }
-        
-        // Normalize stats
-        if (data.stats) {
-          data.stats.avg_upload_hours = data.stats.avg_upload_hours === null 
-            ? null 
-            : Number(data.stats.avg_upload_hours);
-        }
-      }
-      
-      return response.data;
+      const raw = response.data?.data || {};
+      const stats = raw.stats || raw;
+      const normalized: HiResAnalytics = {
+        period: raw.period || period || '30d',
+        stats: {
+          total_deliveries: Number(stats.total_deliveries ?? ((stats.waiting || 0) + (stats.uploaded || 0) + (stats.delivered || 0))),
+          pending: Number(stats.pending ?? stats.waiting ?? 0),
+          delivered: Number(stats.delivered ?? 0),
+          overdue: Number(stats.overdue ?? 0),
+          avg_upload_hours: stats.avg_upload_hours == null ? null : Number(stats.avg_upload_hours),
+          within_sla: Number(stats.within_sla ?? 0),
+          missed_sla: Number(stats.missed_sla ?? stats.overdue ?? 0),
+        },
+        by_photographer: Array.isArray(raw.by_photographer) ? raw.by_photographer.map((p: any) => ({
+          ...p,
+          avg_hours: p.avg_hours == null ? null : Number(p.avg_hours),
+          sla_compliance_pct: Number(p.sla_compliance_pct || 0),
+        })) : [],
+        daily_trend: Array.isArray(raw.daily_trend) ? raw.daily_trend : [],
+      };
+      return { success: response.data?.success === true, data: normalized, error: response.data?.error };
     } catch (error: any) {
       console.error('getAnalytics error:', error.response?.data || error.message);
       throw error;
@@ -307,21 +311,22 @@ export const hiresService = {
       const response = await api.get(`/hires/admin/queue?${queryParams.toString()}`);
       
       // ✅ Normalize admin queue data
-      if (response.data.success && response.data.data) {
-        response.data.data.queue = response.data.data.queue.map((item: any) => ({
-          ...item,
-          queue_id: item.id || item.queue_id,
-          filename: item.photo_filename || item.filename,
-          buyer_name: item.user_name || item.buyer_name,
-          buyer_email: item.user_email || item.buyer_email,
-          is_overdue: Boolean(item.is_overdue), // Convert 0/1 to boolean
-          hours_since_payment: item.hours_since_payment === null 
-            ? null 
-            : Number(item.hours_since_payment),
-        }));
-      }
-      
-      return response.data;
+      const payload = response.data?.data;
+      const queue = Array.isArray(payload) ? payload : (payload?.queue || []);
+      return {
+        success: response.data?.success === true,
+        data: {
+          queue: queue.map((item: any) => ({
+            ...item,
+            queue_id: item.queue_id || item.id,
+            status: item.status === 'waiting' ? 'pending' : item.status,
+            sla_deadline: item.sla_deadline || item.sla_due_at || null,
+            is_overdue: Boolean(item.is_overdue),
+          })),
+          ...(payload?.stats ? { stats: payload.stats } : {}),
+        },
+        error: response.data?.error,
+      };
     } catch (error: any) {
       console.error('getAdminQueue error:', error.response?.data || error.message);
       throw error;
