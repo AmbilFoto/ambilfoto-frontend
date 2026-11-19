@@ -39,8 +39,6 @@ import AdminStorage from "./pages/admin/Storage";
 import AdminRoute from "./components/AdminRoute";
 import AdminWithdrawals from "./pages/admin/Withdrawals";
 import AdminSettings from "./pages/admin/Settings";
-import UserWallet from "./pages/user/Walllet";
-import UserTopUp from "./pages/user/TopUp";
 import PhotographerWallet from "./pages/photographer/Wallet";
 import PaymentSuccess from "./pages/payment/PaymentSuccess";
 import PaymentPending from "./pages/payment/PaymentPending";
@@ -237,22 +235,9 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/user/wallet" 
-              element={
-                <ProtectedRoute>
-                  <UserWallet />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/user/topup" 
-              element={
-                <ProtectedRoute>
-                  <UserTopUp />
-                </ProtectedRoute>
-              } 
-            />
+            {/* FOTOPOIN wallet and top-up stay disabled until points are enabled. */}
+            <Route path="/user/wallet" element={<Navigate to="/user/dashboard" replace />} />
+            <Route path="/user/topup" element={<Navigate to="/user/dashboard" replace />} />
             
             {/* ✅ NEW ESCROW ROUTE */}
             <Route 
