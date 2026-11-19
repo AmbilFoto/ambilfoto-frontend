@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './gateway';
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/api';
+const AUTH_API_URL = API_BASE_URL;
 
 const adminApi = axios.create({
   baseURL: `${AUTH_API_URL}/admin`,
