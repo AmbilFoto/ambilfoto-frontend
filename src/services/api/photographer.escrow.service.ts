@@ -186,9 +186,17 @@ export const photographerEscrowService = {
     error?: string;
   }> {
     try {
-      const response = await api.get('/hires/photographer/queue');
+      const [response, ordersResponse] = await Promise.all([
+        api.get('/hires/photographer/queue', { params: {
+          ...(params?.status === 'new' ? { status: 'waiting' } : {}),
+        } }),
+        api.get('/photographer/orders', { params: { page: params?.page || 1, limit: params?.limit || 100 } }).catch(() => null),
+      ]);
       const raw = response.data?.data;
       const queue = Array.isArray(raw) ? raw : (raw?.queue || []);
+      const orderPayload = ordersResponse?.data?.data;
+      const orders = Array.isArray(orderPayload) ? orderPayload : (orderPayload?.orders || []);
+      const orderById = new Map(orders.map((order: any) => [order.order_id || order.id, order]));
       const now = Date.now();
       const mapped: PendingOrder[] = queue.map((item: any) => {
         const createdAt = item.created_at || new Date().toISOString();
@@ -197,14 +205,16 @@ export const photographerEscrowService = {
         const overdue = hoursRemaining < 0;
         const urgency = overdue ? 'overdue' : hoursRemaining <= 12 ? 'urgent' : hoursRemaining <= 24 ? 'warning' : 'normal';
         const waiting = item.status === 'waiting' || item.status === 'overdue';
+        const relatedOrder: any = orderById.get(item.order_id);
+        const totalAmount = Number(relatedOrder?.total_amount || 0);
         return {
           transaction_id: item.queue_id || item.id,
           order_id: item.order_id || '',
           buyer: { id: item.user_id || '', name: item.user_id ? `Pembeli ${item.user_id.slice(0, 8)}` : 'Pembeli', email: '', phone: null },
-          photo: { id: item.purchase_id || '', filename: item.purchase_id || 'Foto pesanan', event_name: 'Pesanan AmbilFoto', event_type: null, event_date: createdAt, preview_url: null },
+          photo: { id: item.purchase_id || '', filename: item.purchase_id || 'Foto pesanan', event_name: relatedOrder?.event_id ? `Event ${relatedOrder.event_id}` : 'Pesanan AmbilFoto', event_type: null, event_date: createdAt, preview_url: null },
           status: { escrow: waiting ? 'HELD' : item.status === 'uploaded' ? 'UPLOADED' : item.status.toUpperCase(), delivery: item.status, urgency, action_required: item.status === 'uploaded' ? 'deliver' : 'upload' },
           revision: null,
-          payment: { total_amount: 0, platform_fee: 0, your_earning: 0, your_earning_formatted: '—' },
+          payment: { total_amount: totalAmount, platform_fee: 0, your_earning: 0, your_earning_formatted: '—' },
           deadline: { upload_deadline: deadlineAt.toLocaleString('id-ID'), hours_remaining: hoursRemaining, is_overdue: overdue, is_urgent: !overdue && hoursRemaining <= 12 },
           purchased_at: createdAt,
         };
