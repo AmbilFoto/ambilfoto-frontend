@@ -1,5 +1,6 @@
 // src/pages/PhotographerPendingOrders.tsx
 
+import { OrderLifecyclePanel } from "@/components/orders/OrderLifecyclePanel";
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { photographerEscrowService, PendingOrder } from '@/services/api/photographer.escrow.service';
