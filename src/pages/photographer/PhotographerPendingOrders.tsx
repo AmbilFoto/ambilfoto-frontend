@@ -211,6 +211,7 @@ const PhotographerPendingOrders = () => {
       <Header />
       
       <main className="container mx-auto px-4 py-8">
+        <OrderLifecyclePanel role="photographer" />
         {/* Judul Halaman */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div className="flex items-center gap-4">
