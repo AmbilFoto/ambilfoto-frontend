@@ -52,7 +52,6 @@ export const PhotoDetailModal = ({
   const isPurchased = photo.is_purchased;
   const isForSale = photo.is_for_sale !== false;
   const priceCash = photo.price_cash || photo.price || photo.purchase_price || 0;
-  const pricePoints = photo.price_points || photo.price_in_points || Math.ceil(priceCash / 5000);
 
   // Get additional metadata
   const eventId = photo.event_id;
@@ -303,21 +302,11 @@ export const PhotoDetailModal = ({
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-background/60 border border-border/50 hover:border-primary/50 transition-colors">
-                  <p className="text-xs text-muted-foreground mb-1">💵 Bayar Cash</p>
-                  <p className="text-lg font-bold text-primary">
-                    {formatCurrency(priceCash)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Via Midtrans</p>
-                </div>
-                <div className="p-3 rounded-lg bg-background/60 border border-border/50 hover:border-yellow-500/50 transition-colors">
-                  <p className="text-xs text-muted-foreground mb-1">🪙 Bayar FOTOPOIN</p>
-                  <p className="text-lg font-bold text-yellow-600 flex items-center gap-1">
-                    <Coins className="h-4 w-4" />
-                    {pricePoints} Points
-                  </p>
-                  <p className="text-xs text-muted-foreground">Instant download</p>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="p-3 rounded-lg bg-background/60 border border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1">💵 Pembayaran</p>
+                  <p className="text-lg font-bold text-primary">{formatCurrency(priceCash)}</p>
+                  <p className="text-xs text-muted-foreground">Pembayaran melalui Midtrans</p>
                 </div>
               </div>
             </div>
