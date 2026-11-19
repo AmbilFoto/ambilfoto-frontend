@@ -188,7 +188,13 @@ export const hiresService = {
 
   async uploadHiRes(queueId: string, data: HiResUploadData): Promise<HiResUploadResponse> {
     try {
-      const response = await api.post(`/hires/photographer/${queueId}/upload`, data);
+      const imageResponse = await fetch(data.face_image);
+      const fileBlob = await imageResponse.blob();
+      const form = new FormData();
+      form.append("file", fileBlob, data.filename);
+      const response = await api.post(`/hires/photographer/${queueId}/upload-file`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       return response.data;
     } catch (error: any) {
       console.error('uploadHiRes error:', error.response?.data || error.message);
@@ -228,7 +234,7 @@ export const hiresService = {
 
   async downloadHiRes(purchaseId: string): Promise<void> {
     try {
-      const response = await api.get(`/hires/user/${purchaseId}/download`, {
+      const response = await api.get(`/hires/user/${purchaseId}/download-file`, {
         responseType: 'blob',
       });
       
