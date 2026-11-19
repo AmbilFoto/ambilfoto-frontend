@@ -7,6 +7,7 @@ import {
   CreditCard, Banknote, Menu, X 
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,6 +92,8 @@ export const Header = () => {
 
           {/* Auth / account area */}
           {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">
@@ -143,6 +146,7 @@ export const Header = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           ) : (
             <>
               {/* Desktop auth buttons
