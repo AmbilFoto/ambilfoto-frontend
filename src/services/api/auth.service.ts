@@ -1,10 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './gateway';
 
-// TODO: ganti balik ke http://localhost:8080/api begitu API Gateway sudah
-// jalan dan route /api/auth/* sudah diproxy ke Auth Service (:8001).
-// Untuk sekarang, langsung ke Auth Service karena gateway belum di-setup.
-const AUTH_API_URL =
-  import.meta.env.VITE_AUTH_API_URL || 'http://localhost:8001/api';
+const AUTH_API_URL = API_BASE_URL;
 
 // ✅ EXPORT authApi agar bisa dipakai di puzzle-captcha.service.ts
 export const authApi = axios.create({
