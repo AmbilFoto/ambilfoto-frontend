@@ -4,7 +4,7 @@ import { useState } from "react";
 import { 
   Camera, LogOut, User, Settings, Calendar, Image, Upload, 
   Shield, Users, DollarSign, Activity, Database, Wallet, 
-  CreditCard, Banknote, Menu, X 
+  Banknote, Menu, X 
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -77,7 +77,6 @@ export const Header = () => {
               <nav className="hidden md:flex items-center gap-6">
                 <Link to="/user/dashboard" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dasbor</Link>
                 <Link to="/user/photos"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Foto Saya</Link>
-                <Link to="/user/wallet"    className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth">Dompet</Link>
               </nav>
             )
           ) : (
@@ -133,8 +132,6 @@ export const Header = () => {
                     <DropdownMenuItem asChild><Link to="/user/dashboard"  className="cursor-pointer">Dasbor</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link to="/user/photos"     className="cursor-pointer">Foto Saya</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link to="/user/scan-face"  className="cursor-pointer">Pindai Wajah</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link to="/user/wallet"     className="cursor-pointer"><Wallet className="mr-2 h-4 w-4" />Dompet</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link to="/user/topup"      className="cursor-pointer"><CreditCard className="mr-2 h-4 w-4" />Isi Poin</Link></DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild><Link to="/user/profile"    className="cursor-pointer"><Settings className="mr-2 h-4 w-4" />Pengaturan Profil</Link></DropdownMenuItem>
                   </>
