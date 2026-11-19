@@ -149,6 +149,23 @@ const PhotographerPendingOrders = () => {
     }
   };
 
+  const handleDeliver = async (order: PendingOrder) => {
+    try {
+      setIsUploading(true);
+      const response = await photographerEscrowService.markAsDelivered(order.transaction_id);
+      if (response.success) {
+        toast.success('Hi-Res berhasil dikirim ke pembeli');
+        await fetchOrders();
+      } else {
+        toast.error(response.error || 'Gagal mengirim Hi-Res ke pembeli');
+      }
+    } catch {
+      toast.error('Gagal mengirim Hi-Res ke pembeli');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const openUploadModal = (order: PendingOrder) => {
     setSelectedOrder(order);
     setUploadModalOpen(true);
@@ -239,7 +256,7 @@ const PhotographerPendingOrders = () => {
         </div>
 
         {/* Kartu Statistik */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card className={stats?.total_pending ? 'border-primary/50' : ''}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -296,21 +313,6 @@ const PhotographerPendingOrders = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-green-500/50">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-500/20">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-green-600">
-                    {formatCurrency(stats?.total_earning_pending || 0)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Penghasilan Tertunda</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Peringatan Terlambat */}
@@ -406,9 +408,6 @@ const PhotographerPendingOrders = () => {
                             </div>
                             <div className="text-right space-y-2">
                               {getUrgencyBadge(order.status.urgency)}
-                              <p className="text-lg font-bold text-green-600">
-                                {order.payment.your_earning_formatted}
-                              </p>
                             </div>
                           </div>
 
@@ -416,7 +415,7 @@ const PhotographerPendingOrders = () => {
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-3">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
-                              <span className="truncate">{order.buyer.name}</span>
+                              <span className="truncate">Order {order.order_id || order.transaction_id}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -424,10 +423,12 @@ const PhotographerPendingOrders = () => {
                                 {format(new Date(order.purchased_at), 'dd MMM yyyy', { locale: id })}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              <span>{formatCurrency(order.payment.total_amount)}</span>
-                            </div>
+                            {order.payment.total_amount > 0 && (
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                <span>{formatCurrency(order.payment.total_amount)}</span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Progress Deadline */}
@@ -471,14 +472,21 @@ const PhotographerPendingOrders = () => {
 
                           {/* Tombol Unggah */}
                           <div className="mt-4">
-                            <Button 
-                              onClick={() => openUploadModal(order)} 
-                              className="w-full gap-2"
-                              variant={order.deadline.is_overdue ? 'destructive' : 'default'}
-                            >
-                              <Upload className="h-4 w-4" />
-                              {order.revision ? 'Unggah Revisi' : 'Unggah Foto Hi-Res'}
-                            </Button>
+                            {order.status.delivery === 'uploaded' ? (
+                              <Button onClick={() => handleDeliver(order)} disabled={isUploading} className="w-full gap-2">
+                                <CheckCircle className="h-4 w-4" />
+                                Kirim Hi-Res ke Pembeli
+                              </Button>
+                            ) : (
+                              <Button 
+                                onClick={() => openUploadModal(order)} 
+                                className="w-full gap-2"
+                                variant={order.deadline.is_overdue ? 'destructive' : 'default'}
+                              >
+                                <Upload className="h-4 w-4" />
+                                {order.revision ? 'Unggah Revisi' : 'Unggah Foto Hi-Res'}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
