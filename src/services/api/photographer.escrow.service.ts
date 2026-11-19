@@ -186,19 +186,48 @@ export const photographerEscrowService = {
     error?: string;
   }> {
     try {
-      const queryParams = new URLSearchParams();
-      if (params?.page) queryParams.append('page', params.page.toString());
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
-      if (params?.status) queryParams.append('status', params.status);
-      
-      const response = await api.get(`/photographer/orders/pending?${queryParams.toString()}`);
-      return response.data;
-    } catch (error: any) {
-      console.error('getPendingOrders error:', error);
+      const response = await api.get('/hires/photographer/queue');
+      const raw = response.data?.data;
+      const queue = Array.isArray(raw) ? raw : (raw?.queue || []);
+      const now = Date.now();
+      const mapped: PendingOrder[] = queue.map((item: any) => {
+        const createdAt = item.created_at || new Date().toISOString();
+        const deadlineAt = item.sla_due_at ? new Date(item.sla_due_at) : new Date(new Date(createdAt).getTime() + 48 * 60 * 60 * 1000);
+        const hoursRemaining = (deadlineAt.getTime() - now) / 3600000;
+        const overdue = hoursRemaining < 0;
+        const urgency = overdue ? 'overdue' : hoursRemaining <= 12 ? 'urgent' : hoursRemaining <= 24 ? 'warning' : 'normal';
+        const waiting = item.status === 'waiting' || item.status === 'overdue';
+        return {
+          transaction_id: item.queue_id || item.id,
+          order_id: item.order_id || '',
+          buyer: { id: item.user_id || '', name: item.user_id ? `Pembeli ${item.user_id.slice(0, 8)}` : 'Pembeli', email: '', phone: null },
+          photo: { id: item.purchase_id || '', filename: item.purchase_id || 'Foto pesanan', event_name: 'Pesanan AmbilFoto', event_type: null, event_date: createdAt, preview_url: null },
+          status: { escrow: waiting ? 'HELD' : item.status === 'uploaded' ? 'UPLOADED' : item.status.toUpperCase(), delivery: item.status, urgency, action_required: item.status === 'uploaded' ? 'deliver' : 'upload' },
+          revision: null,
+          payment: { total_amount: 0, platform_fee: 0, your_earning: 0, your_earning_formatted: '—' },
+          deadline: { upload_deadline: deadlineAt.toLocaleString('id-ID'), hours_remaining: hoursRemaining, is_overdue: overdue, is_urgent: !overdue && hoursRemaining <= 12 },
+          purchased_at: createdAt,
+        };
+      });
+      const filtered = params?.status === 'new'
+        ? mapped.filter(item => item.status.delivery === 'waiting' || item.status.delivery === 'overdue')
+        : params?.status === 'revision' ? [] : mapped;
+      const pending = mapped.filter(item => item.status.delivery === 'waiting' || item.status.delivery === 'overdue').length;
+      const overdue = mapped.filter(item => item.deadline.is_overdue).length;
       return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch pending orders'
+        success: response.data?.success === true,
+        data: filtered,
+        summary: {
+          total_pending: pending,
+          total_overdue: overdue,
+          total_urgent: mapped.filter(item => item.status.urgency === 'urgent').length,
+          total_revisions: 0,
+          total_earning_pending: 0,
+        },
       };
+    } catch (error: any) {
+      console.error('getPendingOrders (HiRes Service) error:', error.response?.data || error.message);
+      return { success: false, error: error.response?.data?.error || 'Gagal memuat antrean Hi-Res' };
     }
   },
 
@@ -226,29 +255,31 @@ export const photographerEscrowService = {
    * Upload hi-res photo (accepts FormData directly)
    */
   async uploadHiRes(
-    transactionId: string,
+    queueId: string,
     formData: FormData
   ): Promise<UploadResponse> {
     try {
-      const response = await api.post(
-        `/photographer/orders/${transactionId}/upload`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-      
-      return response.data;
-    } catch (error: any) {
-      console.error('uploadHiRes error:', error);
+      const response = await api.post(`/hires/photographer/${encodeURIComponent(queueId)}/upload-file`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to upload hi-res photo',
-        error_code: error.response?.data?.error_code,
-        hint: error.response?.data?.hint
+        success: response.data?.success === true,
+        message: 'Hi-Res berhasil diunggah',
+        data: response.data?.data,
+        error: response.data?.error,
       };
+    } catch (error: any) {
+      console.error('uploadHiRes (HiRes Service) error:', error.response?.data || error.message);
+      return { success: false, error: error.response?.data?.error || 'Gagal mengunggah Hi-Res' };
+    }
+  },
+
+  async markAsDelivered(queueId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await api.post(`/hires/photographer/${encodeURIComponent(queueId)}/deliver`);
+      return { success: response.data?.success === true, error: response.data?.error };
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'Gagal mengirim Hi-Res ke pembeli' };
     }
   },
 
