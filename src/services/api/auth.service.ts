@@ -102,16 +102,6 @@ export const authService = {
   },
 
   /**
-   * Register face after signup
-   */
-  async registerFace(faceEmbedding: string): Promise<AuthResponse> {
-    const response = await authApi.put('/auth/register/face', {
-      face_embedding: faceEmbedding,
-    });
-    return response.data;
-  },
-
-  /**
    * Login email/password
    */
   async login(data: LoginData): Promise<AuthResponse> {
